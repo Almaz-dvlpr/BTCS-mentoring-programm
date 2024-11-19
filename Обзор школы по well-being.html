@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система контроля well-being</title>
+    <style>
+        /* Основные стили */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .students-map {
+            display: grid;
+            grid-template-columns: repeat(25, 30px); /* 25 колонок по 30px для более горизонтального отображения */
+            grid-template-rows: auto;
+            gap: 5px;
+            justify-content: center;
+            width: 100%;
+            max-width: 1000px;
+            margin-top: 20px;
+        }
+
+        .student-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .red { background-color: red; }
+        .green { background-color: green; }
+        .blue { background-color: blue; }
+
+        /* Стиль для модального окна */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+        }
+
+        .modal input, .modal select, .modal textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .modal button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .modal button:hover {
+            background-color: #45a049;
+        }
+
+        .close-btn {
+            background-color: #f44336;
+            padding: 5px 10px;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            background-color: #e53935;
+        }
+
+        button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Система контроля well-being учеников</h1>
+            <p>Учитель, пожалуйста, войдите в систему.</p>
+        </div>
+
+        <div id="loginForm">
+            <input type="text" id="username" placeholder="Логин">
+            <input type="password" id="password" placeholder="Пароль">
+            <button onclick="login()">Войти</button>
+            <p id="error" style="color: red; display: none;">Неверный логин или пароль</p>
+        </div>
+
+        <div id="classSelector" style="display:none;">
+            <h2>Выберите класс:</h2>
+            <select id="classList"></select>
+            <button onclick="loadClass()">Загрузить класс</button>
+            <button onclick="loadAllSchool()" id="allSchoolBtn" style="display:none;">Вся школа</button> <!-- Скрыт для учителей -->
+            <button onclick="logout()">Выйти</button>
+        </div>
+
+        <div id="studentsMap" class="students-map" style="display:none;"></div>
+
+        <button onclick="goBack()" style="display:none;" id="backBtn">Назад</button>
+    </div>
+
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <h2>Оставьте отзыв</h2>
+            <label for="studentName">Имя ученика:</label>
+            <input type="text" id="studentName" disabled>
+
+            <label for="status">Выберите статус:</label>
+            <select id="status">
+                <option value="red">Проблемы с воспитанием</option>
+                <option value="green">Классный и воспитанный</option>
+                <option value="blue">Интроверт</option>
+            </select>
+
+            <label for="reviewText">Отзыв:</label>
+            <textarea id="reviewText" rows="4"></textarea>
+
+            <button id="saveReviewBtn">Сохранить отзыв</button>
+            <button class="close-btn" id="closeModalBtn">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        const teachers = {
+            'teacher1': { password: '12345', classes: ['Class 1', 'Class 2'] },
+            'teacher2': { password: '12345', classes: ['Class 3', 'Class 4'] },
+            'teacher3': { password: '12345', classes: ['Class 5', 'Class 6'] },
+            'teacher4': { password: '12345', classes: ['Class 7', 'Class 8'] },
+            'teacher5': { password: '12345', classes: ['Class 9', 'Class 10'] },
+            'teacher6': { password: '12345', classes: ['Class 11', 'Class 12'] },
+            'teacher7': { password: '12345', classes: ['Class 13', 'Class 14'] },
+            'teacher8': { password: '12345', classes: ['Class 15', 'Class 16'] },
+            'teacher9': { password: '12345', classes: ['Class 17', 'Class 18'] },
+            'teacher10': { password: '12345', classes: ['Class 19', 'Class 20'] },
+        };
+
+        const admin = { username: 'admin', password: '11111' };
+
+        const students = {
+            'Class 1': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 2': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 3': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 4': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 5': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 6': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 7': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 8': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 9': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 10': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 11': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 12': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 13': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 14': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 15': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 16': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 17': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+            'Class 18': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'blue', comment: '' })),
+            'Class 19': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'red', comment: '' })),
+            'Class 20': Array(20).fill().map((_, index) => ({ id: index + 1, status: 'green', comment: '' })),
+        };
+
+        let currentUser = null;
+        let currentClass = null;
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (username === admin.username && password === admin.password) {
+                currentUser = 'admin';
+                localStorage.setItem('currentUser', 'admin');
+                showClassSelector();
+            } else if (teachers[username] && teachers[username].password === password) {
+                currentUser = username;
+                localStorage.setItem('currentUser', username);
+                showClassSelector();
+            } else {
+                document.getElementById('error').style.display = 'block';
+            }
+        }
+
+        window.onload = function() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = savedUser;
+                showClassSelector();
+            }
+        }
+
+        function showClassSelector() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('classSelector').style.display = 'block';
+
+            const classList = document.getElementById('classList');
+            classList.innerHTML = '';
+
+            if (teachers[currentUser]) {
+                teachers[currentUser].classes.forEach(className => {
+                    const option = document.createElement('option');
+                    option.value = className;
+                    option.textContent = className;
+                    classList.appendChild(option);
+                });
+            }
+
+            // Показываем кнопку "Вся школа" только для администратора
+            if (currentUser === 'admin') {
+                document.getElementById('allSchoolBtn').style.display = 'inline-block';
+            }
+        }
+
+        function loadClass() {
+            currentClass = document.getElementById('classList').value;
+            localStorage.setItem('currentClass', currentClass);
+            document.getElementById('classSelector').style.display = 'none';
+            displayStudents();
+            document.getElementById('backBtn').style.display = 'block';
+        }
+
+        function loadAllSchool() {
+            currentClass = 'All';
+            localStorage.setItem('currentClass', 'All');
+            document.getElementById('classSelector').style.display = 'none';
+            displayStudents();
+            document.getElementById('backBtn').style.display = 'block';
+        }
+
+        function displayStudents() {
+            const mapContainer = document.getElementById('studentsMap');
+            mapContainer.innerHTML = '';
+
+            let studentsToDisplay = [];
+            if (currentClass === 'All') {
+                for (const className in students) {
+                    studentsToDisplay = studentsToDisplay.concat(students[className]);
+                }
+            } else {
+                studentsToDisplay = students[currentClass];
+            }
+
+            studentsToDisplay.forEach((student, index) => {
+                const studentDot = document.createElement('div');
+                studentDot.classList.add('student-dot', student.status);
+                studentDot.onclick = () => openReviewModal(student);
+                mapContainer.appendChild(studentDot);
+            });
+
+            mapContainer.style.display = 'grid';
+        }
+
+        function openReviewModal(student) {
+            const modal = document.getElementById('reviewModal');
+            modal.style.display = 'flex';
+
+            document.getElementById('studentName').value = `Student ${student.id}`;
+            document.getElementById('status').value = student.status;
+            document.getElementById('reviewText').value = student.comment;
+
+            document.getElementById('saveReviewBtn').onclick = () => saveReview(student);
+            document.getElementById('closeModalBtn').onclick = closeReviewModal;
+        }
+
+        function saveReview(student) {
+            student.status = document.getElementById('status').value;
+            student.comment = document.getElementById('reviewText').value;
+
+            displayStudents();
+            closeReviewModal();
+        }
+
+        function closeReviewModal() {
+            document.getElementById('reviewModal').style.display = 'none';
+        }
+
+        function goBack() {
+            document.getElementById('studentsMap').style.display = 'none';
+            document.getElementById('backBtn').style.display = 'none';
+            document.getElementById('classSelector').style.display = 'block';
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('currentClass');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
