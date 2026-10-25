@@ -191,7 +191,9 @@
         <button class="btn primary block" id="save">Сохранить</button></div>
       <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
       <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
-      ${JP.cloud && JP.cloud.token() ? `<div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>. Прогресс сохраняется на сервере автоматически${JP.cloud.status === 'ok' ? ' ✓' : JP.cloud.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : JP.cloud.status === 'revoked' ? ' — доступ отозван, обратитесь к преподавателю' : ''}.</p><button class="btn" id="logout">Выйти на этом устройстве</button><p class="muted" style="font-size:.85rem;margin-bottom:0">Чтобы войти снова, понадобится новый код от преподавателя.</p></div>` : ''}
+      <div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>${JP.cloud && JP.cloud.token() ? '. Прогресс сохраняется на сервере автоматически' + (JP.cloud.status === 'ok' ? ' ✓' : JP.cloud.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : JP.cloud.status === 'revoked' ? ' — доступ отозван, обратитесь к преподавателю' : '') + '.' : ' (без входа по коду: данные только на этом устройстве).'}</p>
+        <div class="row"><button class="btn" id="logout">Выйти</button><a class="btn ghost" href="#/admin">Вход для преподавателя</a></div>
+        <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» очищает ученический вход и данные на этом устройстве. Прогресс остаётся на сервере, для нового входа понадобится код от преподавателя.</p></div>
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
         <div class="row"><button class="btn" id="exp">⬇️ Скачать прогресс</button><button class="btn" id="imp">⬆️ Загрузить</button><input type="file" id="file" accept=".json" hidden></div>
         <details style="margin-top:12px"><summary>Начать заново</summary><p class="muted">Удалит все ответы, прогресс и тексты на этом устройстве.</p><button class="btn" style="color:var(--bad)" id="reset">Удалить всё</button></details></div>
@@ -210,7 +212,7 @@
       const d = E.day(U.today()); d.built = false; JP.store.save(); U.toast('Сохранено ✓'); upd();
     };
     ui.$('#ics').onclick = () => ui.download('put-k-b1.ics', E.icsFor(), 'text/calendar');
-    const lo = ui.$('#logout'); if (lo) lo.onclick = async () => { if (confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, но для входа понадобится новый код.')) { await JP.cloud.flush(); JP.cloud.logoutStudent(); JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); } };
+    ui.$('#logout').onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс на сервере сохранится, но для входа понадобится новый код.')) return; if (JP.cloud && JP.cloud.token()) { await JP.cloud.flush(); JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
     ui.$('#snd').onchange = e => { S().settings.sound = e.target.checked; JP.store.save(); };
     ui.$('#exp').onclick = () => ui.download('progress-' + U.today() + '.json', JP.store.exportJSON(), 'application/json');
     ui.$('#imp').onclick = () => ui.$('#file').click();
