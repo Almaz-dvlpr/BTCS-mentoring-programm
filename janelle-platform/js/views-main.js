@@ -83,8 +83,78 @@
       ${cps.length ? `<div class="card"><h3>Проверки</h3>${cps.map(c => `<div class="list-item"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><b>${Math.round(c.score * 100)}%</b></div>`).join('')}</div>` : ''}
       ${S().writings.length ? `<div class="card"><h3>Письменные работы (${S().writings.length})</h3>${S().writings.slice().reverse().slice(0, forTeacher ? 20 : 3).map(w => `<details><summary>${esc(w.title)} · ${U.fmt(w.date)}</summary>${forTeacher ? `<p class="muted">${esc(w.prompt)}</p>` : ''}<p style="white-space:pre-wrap">${esc(w.text)}</p></details>`).join('')}</div>` : ''}`;
   }
+  // ---------- Дашборд ----------
+  const CATS = [['grammar', 'Грамматика', 'var(--d-gold)'], ['words', 'Слова', 'var(--d-blue)'], ['writing', 'Письмо', 'var(--d-rose)'], ['review', 'Повторение и тесты', 'var(--d-green)']];
+  function spark(vals, w, h) {
+    const max = Math.max(1, ...vals), n = vals.length - 1 || 1;
+    const pts = vals.map((v, i) => [i / n * w, h - 3 - v / max * (h - 8)]);
+    const line = pts.map(([x, y], i) => (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1)).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" aria-hidden="true"><path d="${line} L${w} ${h} L0 ${h} Z" fill="var(--d-gold)" opacity=".15"/><path d="${line}" fill="none" stroke="var(--d-gold)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  function weeklyChart() {
+    const mon = U.mondayOf(U.today()); const weeks = [];
+    for (let k = 11; k >= 0; k--) {
+      const start = U.addDays(mon, -7 * k); const c = { grammar: 0, words: 0, writing: 0, review: 0 };
+      for (let i = 0; i < 7; i++) { const d = S().days[U.addDays(start, i)]; if (!d) continue; if (d.cat) Object.keys(c).forEach(x => { c[x] += d.cat[x] || 0; }); else c.grammar += d.minutes || 0; }
+      weeks.push({ start, c, tot: c.grammar + c.words + c.writing + c.review });
+    }
+    const goal = S().profile.daysPerWeek * S().profile.minutesPerDay; const max = Math.max(goal, ...weeks.map(w => w.tot), 60);
+    const W = 600, H = 220, L = 34, B = 24, bw = (W - L) / 12;
+    let g = '';
+    [0, .5, 1].forEach(f => { const y = H - B - f * (H - B - 10); g += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${Math.round(max * f)}</text>`; });
+    weeks.forEach((w, i) => {
+      let y = H - B; const x = L + i * bw + bw * .18, ww = bw * .64;
+      CATS.forEach(([k, , col]) => { const h = w.c[k] / max * (H - B - 10); if (h > 0) { y -= h; g += `<rect x="${x}" y="${y}" width="${ww}" height="${h}" fill="${col}" rx="2"><title>${U.fmt(w.start)}: ${k} ${w.c[k]} мин</title></rect>`; } });
+      if (i % 2 === 0 || i === 11) g += `<text x="${x + ww / 2}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${U.fmt(w.start, { day: 'numeric', month: 'short' }).replace('.', '')}</text>`;
+    });
+    const gy = H - B - goal / max * (H - B - 10);
+    g += `<line x1="${L}" x2="${W}" y1="${gy}" y2="${gy}" stroke="var(--d-ink)" stroke-dasharray="4 4" opacity=".55"/><text x="${W}" y="${gy - 4}" text-anchor="end" font-size="10" fill="var(--d-ink)">цель ${goal}</text>`;
+    return { svg: `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Минуты занятий по неделям">${g}</svg>`, total: weeks.reduce((a, w) => a + w.tot, 0) };
+  }
+  function topicStatus() {
+    const items = E.items(), U_ = S().units; let done = 0, rev = 0, weak = 0, skip = 0, ahead = 0;
+    items.forEach(it => { const u = U_[it.id]; if (!u) ahead++; else if (u.status === 'skipped') skip++; else if (u.weak) weak++; else if (u.next && u.next <= U.addDays(U.today(), 1)) rev++; else done++; });
+    return { done, rev, weak, skip, ahead, total: items.length };
+  }
   ui.route('/progress', () => {
-    ui.set(`<h1>Прогресс</h1>${reportHtml(false)}<a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a>`);
+    const p = S().profile, prog = E.progress(), est = E.estimate(), wk = E.weekStats(), acc = E.avgAccuracy();
+    const last14 = []; for (let i = 13; i >= 0; i--) last14.push((S().days[U.addDays(U.today(), -i)] || {}).minutes || 0);
+    const prev7 = last14.slice(0, 7).reduce((a, b) => a + b, 0), cur7 = last14.slice(7).reduce((a, b) => a + b, 0);
+    const diff = cur7 - prev7; const trend = diff >= 0 ? `↗ +${diff} мин` : `↘ ${diff} мин`;
+    const ch = weeklyChart(), ts = topicStatus();
+    const dayDone = E.day(U.today()).tasks; const dp = dayDone.length ? Math.round(dayDone.filter(t => t.done).length / dayDone.length * 100) : 0;
+    const known = E.knownWords(), learned = E.learnedWords();
+    const accVals = Object.values(S().units).filter(u => u.status === 'done' && u.score != null).sort((a, b) => (a.doneAt || '').localeCompare(b.doneAt || '')).slice(-14).map(u => u.score * 100);
+    const seg = [['done', ts.done, 'var(--d-blue)'], ['rev', ts.rev, 'var(--d-gold)'], ['weak', ts.weak, 'var(--bad)'], ['skip', ts.skip, 'var(--d-green)'], ['ahead', ts.ahead, 'var(--line)']];
+    const rows = [['✓', 'Пройдено', 'закреплено, результат ≥ 70%', ts.done, 'var(--d-blue)'], ['🔁', 'На повторении', 'вернутся сегодня или завтра', ts.rev, 'var(--d-gold)'], ['!', 'Нужно подтянуть', 'результат ниже 70%', ts.weak, 'var(--bad)'], ['⏭', 'Пропущено', 'знакомо по диагностике', ts.skip, 'var(--d-green)'], ['○', 'Впереди', 'ещё не начато', ts.ahead, 'var(--muted)']]
+      .map(([ic, t, d, n, col]) => `<div class="d-row"><span class="d-ic" style="color:${col}">${ic}</span><span class="grow"><b>${t}</b><br><small class="muted">${d}</small></span><span class="d-num">${n}</span></div>`).join('');
+    const stageRows = E.roadmap().map(st => { const d = st.items.filter(i => E.isDone(i.id)).length; return `<div class="d-stage"><span class="lvl ${d === 0 ? 'off' : ''}">${st.level}</span><div class="grow"><div class="row between"><b>${esc(st.title)}</b><small class="muted">${d} из ${st.items.length}</small></div><div class="d-bar"><i style="width:${Math.round(d / st.items.length * 100)}%"></i></div></div></div>`; }).join('');
+    const weak = E.weakTopics().slice(0, 5);
+    const doneCount = Object.values(S().units).filter(u => u.status === 'done').length;
+    ui.set(`<div class="dash">
+      <div class="d-eyebrow">${U.parse(U.today()).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()} · ЭТАП ${E.currentStage()}</div>
+      <h1 class="d-title">Прогресс, ${esc(p.name)}</h1>
+      <p class="muted">Пройдено ${doneCount} ${U.plural(doneCount, 'тема', 'темы', 'тем')}, изучено ${learned} ${U.plural(learned, 'слово', 'слова', 'слов')}. До B1 осталось ≈ ${Math.round(est.remaining / 60)} ч, прогноз — ${U.fmtLong(est.eta)}</p>
+      <div class="d-kpis">
+        <div class="d-card"><div class="d-lab">Путь к B1</div><div class="d-big">${Math.round(prog * 100)}<small>%</small></div><div class="d-bar"><i style="width:${Math.round(prog * 100)}%"></i></div><div class="d-foot">${est.deadline ? (est.ok ? '✓ срок реален' : 'нужно ≈' + est.needWeekly + ' мин/нед') : 'к ' + U.fmt(est.eta)}</div></div>
+        <div class="d-card"><div class="d-lab">Эта неделя</div><div class="d-big">${wk.minutes}<small> / ${wk.goalMin} мин</small></div><div class="d-bar"><i style="width:${Math.round(U.clamp(wk.minutes / wk.goalMin, 0, 1) * 100)}%"></i></div><div class="d-foot"><span class="${diff >= 0 ? 'up' : 'down'}">${trend}</span> к прошлой неделе</div></div>
+        <div class="d-card"><div class="d-lab">Точность <small>последние темы</small></div><div class="d-big">${acc == null ? '—' : Math.round(acc * 100)}<small>${acc == null ? '' : '%'}</small></div>${spark(accVals.length > 1 ? accVals : [0, 0], 200, 40)}<div class="d-foot">${accVals.length} ${U.plural(accVals.length, 'результат', 'результата', 'результатов')}</div></div>
+        <div class="d-card"><div class="d-lab">Слова</div><div class="d-big">${learned}</div>${spark(last14, 200, 40)}<div class="d-foot"><span class="up">${known}</span> запомнено крепко · 🔥 ${E.streak()} подряд</div></div>
+      </div>
+      <div class="d-main">
+        <div class="d-card d-wide"><div class="row between"><div><h2 class="d-h2">Минуты по неделям</h2><small class="muted">12 недель, по видам занятий</small></div><div class="d-right"><small class="muted">ВСЕГО</small><div class="d-total">${ch.total} мин</div></div></div>
+          <div class="d-legend">${CATS.map(c => `<span><i style="background:${c[2]}"></i>${c[1]}</span>`).join('')}</div>${ch.svg}</div>
+        <div class="d-card"><div class="row between"><h2 class="d-h2">Статус тем</h2><small class="muted">${ts.total} всего</small></div>
+          <div class="d-seg">${seg.map(([k, n, col]) => n ? `<i style="flex:${n};background:${col}" title="${k}: ${n}"></i>` : '').join('')}</div>
+          ${rows}
+          <div class="d-today"><div><b>Сегодняшний план</b><br><small class="muted">${dayDone.filter(t => t.done).length} из ${dayDone.length} задач</small></div><div class="ring" style="--p:${dp};width:58px;height:58px"><span style="width:44px;height:44px;font-size:.85rem">${dp}%</span></div></div></div>
+      </div>
+      <div class="d-main">
+        <div class="d-card"><h2 class="d-h2">Этапы маршрута</h2><div style="margin-top:8px">${stageRows}</div></div>
+        <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span><a class="btn small ghost" href="#/unit/${w.id}">Открыть</a></div>`).join('') : '<p class="muted">Слабых тем нет — так держать!</p>'}
+          ${S().checkpoints.length ? `<h3 style="margin-top:16px">Последние проверки</h3>${S().checkpoints.slice(-3).reverse().map(c => `<div class="d-row"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><span class="d-num">${Math.round(c.score * 100)}%</span></div>`).join('')}` : ''}</div>
+      </div>
+      <a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a></div>`);
   });
 
   // ---------- Ещё: настройки ----------

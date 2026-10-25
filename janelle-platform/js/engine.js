@@ -146,7 +146,7 @@
 
   // ---------- Дни, серии, минуты ----------
   E.day = d => { const st = S(); if (!st.days[d]) st.days[d] = { tasks: [], minutes: 0, built: false }; return st.days[d]; };
-  E.addMinutes = (m) => { const d = E.day(U.today()); d.minutes = (d.minutes || 0) + m; JP.store.save(); };
+  E.addMinutes = (m, cat) => { const d = E.day(U.today()); d.minutes = (d.minutes || 0) + m; d.cat = d.cat || {}; cat = cat || 'grammar'; d.cat[cat] = (d.cat[cat] || 0) + m; JP.store.save(); };
   E.isStudyDay = d => { const p = S().profile; return !!p && p.studyDays.includes(U.dow(d)); };
   E.didStudy = d => { const x = S().days[d]; return !!x && ((x.minutes || 0) > 0 || (x.tasks || []).some(t => t.done)); };
   E.streak = () => {

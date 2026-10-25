@@ -163,3 +163,35 @@ pre.report { white-space: pre-wrap; background: var(--card); border: 1px solid v
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (min-width: 640px) { #app { padding: 24px; } .qtext { font-size: 1.3rem; } }
 @media print { #tabs, .btn { display: none !important; } body { background: #fff; } }
+
+/* ---------- Дашборд (тёплая тема) ---------- */
+.dash { --d-gold: #b5832a; --d-blue: #2c5f9e; --d-rose: #c9798f; --d-green: #4c9a6a; --d-ink: #3a2c14; --d-card: #fffdf8; --d-line: #ece4d3; max-width: 1100px; margin: 0 auto; }
+.dash .d-eyebrow { letter-spacing: .12em; font-size: .72rem; font-weight: 700; color: var(--d-gold); }
+.dash .d-title, .dash .d-h2, .dash .d-big, .dash .d-total { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
+.dash .d-title { font-size: 2rem; margin: .1em 0 .2em; }
+.dash .d-h2 { font-size: 1.2rem; margin: 0; }
+.d-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+.d-main { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 12px 0; }
+.d-card { background: var(--d-card); border: 1px solid var(--d-line); border-radius: 18px; padding: 16px; box-shadow: 0 1px 2px rgba(80,60,20,.06); }
+.d-lab { font-weight: 600; margin-bottom: 6px; } .d-lab small { color: var(--muted); font-weight: 400; }
+.d-big { font-size: 2.3rem; line-height: 1.1; margin-bottom: 8px; } .d-big small { font-size: .95rem; color: var(--muted); font-family: inherit; }
+.d-bar { height: 8px; background: var(--d-line); border-radius: 99px; overflow: hidden; }
+.d-bar > i { display: block; height: 100%; background: var(--d-gold); border-radius: 99px; }
+.d-foot { margin-top: 10px; font-size: .85rem; color: var(--muted); }
+.up { color: var(--d-green); font-weight: 700; } .down { color: var(--bad); font-weight: 700; }
+.d-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0; font-size: .85rem; }
+.d-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.d-right { text-align: right; } .d-total { font-size: 1.6rem; }
+.d-seg { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; margin: 12px 0; }
+.d-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--d-line); }
+.d-ic { width: 32px; height: 32px; border-radius: 10px; background: var(--d-line); display: grid; place-items: center; font-weight: 800; flex: none; }
+.d-num { font-family: Georgia, serif; font-size: 1.4rem; font-weight: 600; }
+.d-today { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding: 12px; border-radius: 14px; background: var(--brand-soft); }
+.d-stage { display: flex; gap: 12px; align-items: center; padding: 8px 0; }
+.d-stage .lvl { width: 54px; flex: none; }
+@media (min-width: 900px) {
+  #app:has(.dash) { max-width: 1140px; }
+  .d-kpis { grid-template-columns: repeat(4, 1fr); }
+  .d-main { grid-template-columns: 1.7fr 1fr; }
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dash { --d-card: #1d2229; --d-line: #2f3640; --d-ink: #f0e6d0; --d-gold: #e0b255; --d-blue: #6aa2e8; } }

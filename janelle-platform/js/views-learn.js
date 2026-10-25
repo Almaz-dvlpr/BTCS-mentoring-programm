@@ -8,7 +8,8 @@
   const ctxNew = (type, ref, task) => ({ type, ref, task, t0: Date.now() });
   function finishTask(ctx) {
     const mins = U.clamp(Math.round((Date.now() - ctx.t0) / 60000), 1, 45);
-    E.addMinutes(mins);
+    const it = ctx.type === 'unit' ? E.item(ctx.ref) : null;
+    E.addMinutes(mins, it ? (it.kind === 'vocab' ? 'words' : it.kind === 'write' ? 'writing' : 'grammar') : ctx.type === 'srs' ? 'words' : 'review');
     if (ctx.task) { ctx.task.done = true; JP.store.save(); } else E.markTask(ctx.type, ctx.ref);
   }
   const nextCta = () => { const t = E.nextTask(); return t ? `<a class="btn primary block" href="#/do/${t.id}">Дальше: ${esc(t.title)}</a><a class="btn ghost block" style="margin-top:8px" href="#/">На главную</a>` : `<a class="btn primary block" href="#/">На главную</a>`; };
@@ -203,7 +204,7 @@
     JP.runQuiz(ui.$('#qz'), qs, { label: 'Слова', onDone: res => {
       res.forEach(r => E.gradeCard(r.wid, r.ok));
       const score = res.filter(r => r.ok).length / res.length;
-      if (task) finishTask(ctx); else E.addMinutes(Math.max(1, Math.round(res.length / 4)));
+      if (task) finishTask(ctx); else E.addMinutes(Math.max(1, Math.round(res.length / 4)), 'words');
       const missed = [...new Set(res.filter(r => !r.ok).map(r => r.wid))].map(E.wordById);
       resultScreen({ emoji: score >= .85 ? '🧠' : '👍', title: 'Повторение завершено', score, msg: A.praise(score) + ' ' + (E.dueCards().length ? 'Ещё осталось ' + E.dueCards().length + ' карточек — можно повторить позже сегодня.' : 'Все карточки на сегодня повторены.'),
         html: missed.length ? `<div class="card"><h3>Повтори эти слова</h3><div class="words">${missed.map(w => `<div class="word"><div><b>${esc(w.en)}</b> — ${esc(w.ru)}</div><button class="icon-btn" data-say="${esc(w.en)}">🔊</button></div>`).join('')}</div></div>` : '' });
