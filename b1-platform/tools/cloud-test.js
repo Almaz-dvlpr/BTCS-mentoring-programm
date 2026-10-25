@@ -48,7 +48,7 @@ const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')))
   ok(true, 'неверный пароль отклоняется');
   await p.fill('#pw', 'secret123'); await p.click('#in'); await p.waitForSelector('text=Ученики');
   ok(await p.locator('text=Анна').count() > 0, 'преподаватель видит ученика в списке');
-  await p.fill('#lab', 'Мария'); await p.click('#mk'); await p.waitForSelector('text=Неиспользованные коды');
+  await p.fill('#lab', 'Мария'); await p.click('#mk'); await p.waitForSelector('text=Запас кодов');
   ok(await p.locator('text=Мария').count() > 0, 'преподаватель создаёт новый код');
   await p.fill('#cnt', '5'); await p.fill('#lab', 'Пачка'); await p.click('#mkn'); await p.waitForSelector('text=Запас кодов');
   ok((await DB(p)).invites.filter(i => /^Пачка/.test(i.label || '')).length === 5, 'создаётся пачка из 5 кодов');
