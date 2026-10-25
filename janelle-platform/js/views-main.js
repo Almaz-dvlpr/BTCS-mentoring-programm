@@ -116,6 +116,23 @@
     items.forEach(it => { const u = U_[it.id]; if (!u) ahead++; else if (u.status === 'skipped') skip++; else if (u.weak) weak++; else if (u.next && u.next <= U.addDays(U.today(), 1)) rev++; else done++; });
     return { done, rev, weak, skip, ahead, total: items.length };
   }
+  function heatmap() {
+    const mon = U.mondayOf(U.today()), today = U.today(), goal = S().profile.minutesPerDay;
+    let cols = '', n = 0;
+    for (let w = 11; w >= 0; w--) {
+      let col = '';
+      for (let d = 0; d < 7; d++) {
+        const date = U.addDays(mon, -7 * w + d);
+        if (date > today) { col += '<i class="hm future"></i>'; continue; }
+        const m = (S().days[date] || {}).minutes || 0; if (m) n++;
+        const lvl = m === 0 ? 0 : m < goal * .5 ? 1 : m < goal ? 2 : m < goal * 1.5 ? 3 : 4;
+        col += `<i class="hm l${lvl}${date === today ? ' now' : ''}" title="${U.fmt(date)}: ${m} мин"></i>`;
+      }
+      cols += `<div class="hm-col">${col}</div>`;
+    }
+    const labels = ['Пн', '', 'Ср', '', 'Пт', '', 'Вс'].map(l => `<span>${l}</span>`).join('');
+    return `<div class="d-card"><div class="row between"><div><h2 class="d-h2">Календарь занятий</h2><small class="muted">12 недель · занималась ${n} ${U.plural(n, 'день', 'дня', 'дней')}</small></div><div class="d-legend" style="margin:0">Меньше <i class="hm l1"></i><i class="hm l2"></i><i class="hm l3"></i><i class="hm l4"></i> больше</div></div><div class="hm-wrap"><div class="hm-lab">${labels}</div><div class="hm-grid">${cols}</div></div></div>`;
+  }
   ui.route('/progress', () => {
     const p = S().profile, prog = E.progress(), est = E.estimate(), wk = E.weekStats(), acc = E.avgAccuracy();
     const last14 = []; for (let i = 13; i >= 0; i--) last14.push((S().days[U.addDays(U.today(), -i)] || {}).minutes || 0);
@@ -149,6 +166,7 @@
           ${rows}
           <div class="d-today"><div><b>Сегодняшний план</b><br><small class="muted">${dayDone.filter(t => t.done).length} из ${dayDone.length} задач</small></div><div class="ring" style="--p:${dp};width:58px;height:58px"><span style="width:44px;height:44px;font-size:.85rem">${dp}%</span></div></div></div>
       </div>
+      <div style="margin:12px 0">${heatmap()}</div>
       <div class="d-main">
         <div class="d-card"><h2 class="d-h2">Этапы маршрута</h2><div style="margin-top:8px">${stageRows}</div></div>
         <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span><a class="btn small ghost" href="#/unit/${w.id}">Открыть</a></div>`).join('') : '<p class="muted">Слабых тем нет — так держать!</p>'}
