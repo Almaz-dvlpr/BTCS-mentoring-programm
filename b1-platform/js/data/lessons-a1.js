@@ -8,7 +8,7 @@
 <tr><td>he / she / it</td><td>is</td><td>he's / she's / it's</td></tr>
 <tr><td>we / you / they</td><td>are</td><td>we're / you're / they're</td></tr></table>
 <p>Отрицание — добавь <b>not</b>: <q>She is not (isn't) at home.</q> <q>I'm not tired.</q> Обрати внимание: <b>I amn't</b> не существует.</p>`, [
-    gap('My name ___ Janelle.', 'is', 'С he / she / it и с именем — is.'),
+    gap('My name ___ Anna.', 'is', 'С he / she / it и с именем — is.'),
     gap('We ___ at home now.', 'are'),
     mc('They ___ my friends.', ['is', 'am', 'are'], 2),
     gap('Short form: <b>I am</b> → ___', "I'm|I am"),

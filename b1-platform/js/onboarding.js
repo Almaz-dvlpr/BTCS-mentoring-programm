@@ -5,7 +5,7 @@
   // ---------------- Опросник ----------------
   const WHY = [['work', '💼 Работа и карьера'], ['travel', '✈️ Путешествия'], ['study', '🎓 Учёба / экзамен'], ['relocation', '🌍 Переезд'], ['friends', '💬 Общение с людьми'], ['hobby', '🎬 Фильмы, музыка, книги'], ['self', '🌱 Для себя']];
   const STEPS = [
-    { key: 'name', type: 'text', ask: () => 'Привет! Я Эми — виртуальный ассистент твоего преподавателя 👋 Я буду вести тебя к уровню B1: подбирать уроки, напоминать о повторении и следить за прогрессом. Как к тебе обращаться?', def: 'Жанель' },
+    { key: 'name', type: 'text', ask: () => 'Привет! Я Эми — виртуальный ассистент твоего преподавателя 👋 Я буду вести тебя к уровню B1: подбирать уроки, напоминать о повторении и следить за прогрессом. Как к тебе обращаться?', def: '' },
     { key: 'reasons', type: 'multi', ask: a => `Приятно познакомиться, ${a.name}! Зачем тебе английский? Это нужно, чтобы я расставила акценты в словах. Можно выбрать несколько.`, options: WHY },
     { key: 'selfLevel', type: 'single', ask: () => 'Как ты сама оцениваешь свой английский сейчас?', options: [['zero', 'Почти с нуля'], ['base', 'Знаю базу, но путаюсь'], ['talk', 'Могу немного поговорить'], ['passive', 'Понимаю многое, но сама говорю мало']] },
     { key: 'difficulties', type: 'multi', ask: () => 'Что даётся тяжелее всего? Это поможет мне подобрать упражнения.', options: [['grammar', 'Грамматика'], ['words', 'Запоминать слова'], ['speaking', 'Говорить'], ['listening', 'Понимать на слух'], ['reading', 'Читать'], ['writing', 'Писать'], ['pron', 'Произношение'], ['fear', 'Страх ошибиться']] },
@@ -64,7 +64,7 @@
       if (s.type === 'text') {
         ans.innerHTML = `<div class="row"><input type="text" id="in" value="${esc(s.def || '')}" maxlength="40" aria-label="Ответ" class="grow"><button class="btn primary" id="ok">Дальше</button></div>`;
         const inp = ui.$('#in'); inp.focus(); inp.select();
-        const go = () => { const v = inp.value.trim() || s.def; submit(s, v); };
+        const go = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } submit(s, v); };
         ui.$('#ok').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
       } else if (s.type === 'single') {
         ans.innerHTML = `<div class="choices">${s.options.map(o => `<button class="choice" data-v="${esc(o[0])}">${esc(o[1])}</button>`).join('')}</div>`;
@@ -92,7 +92,7 @@
     function finish() {
       const a = answers;
       S().profile = {
-        name: a.name || 'Жанель', reasons: a.reasons || [], selfLevel: a.selfLevel, difficulties: a.difficulties || [],
+        name: a.name || 'друг', reasons: a.reasons || [], selfLevel: a.selfLevel, difficulties: a.difficulties || [],
         daysPerWeek: a.studyDays.length, studyDays: a.studyDays, minutesPerDay: a.minutesPerDay, bestTime: a.bestTime, device: a.device,
         formats: a.formats || [], liveLessons: a.liveLessons || 0, liveDays: a.liveDays || [], deadline: a.deadline || null, asap: a.deadlineMode === 'asap',
         hasBooks: a.hasBooks, tone: a.tone || 'soft', startedAt: U.today()

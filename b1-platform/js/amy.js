@@ -4,7 +4,7 @@
   const tone = () => (S().profile && S().profile.tone) || 'soft';
   const pick = (o) => o[tone()] || o.soft;
   const A = {};
-  A.name = () => (S().profile && S().profile.name) || 'Жанель';
+  A.name = () => (S().profile && S().profile.name) || 'друг';
   A.hello = () => { const h = new Date().getHours(); return h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер'; };
 
   A.praise = score => {

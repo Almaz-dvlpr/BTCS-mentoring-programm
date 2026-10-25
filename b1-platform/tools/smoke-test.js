@@ -35,7 +35,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
 
   // опросник
   const step = async (fn) => { await page.waitForSelector('#ans button, #ans input', { timeout: 4000 }); await fn(); };
-  await step(async () => { await page.fill('#in', 'Жанель'); await page.click('#ok'); });
+  await step(async () => { await page.fill('#in', 'Анна'); await page.click('#ok'); });
   await step(async () => { await page.click('.choice >> nth=1'); await page.click('.choice >> nth=2'); await page.click('#ok'); }); // reasons
   await step(async () => { await page.click('.choice >> nth=1'); }); // self level
   await step(async () => { await page.click('.choice >> nth=0'); await page.click('#ok'); }); // difficulties
@@ -107,7 +107,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
     // каждая задача: может быть урок (кнопка «К упражнениям»), слова («Проверить себя»), письмо, книга или квиз
     if (await page.locator('#go:has-text("упражнениям"), #go:has-text("Повторить упражнения")').count()) { await page.click('#go'); await solve(4); }
     else if (await page.locator('#go:has-text("Проверить себя")').count()) { await page.click('#go'); await solve(0); }
-    else if (await page.locator('#send').count()) { await page.fill('#wr', 'My name is Janelle and I am from a small city. I like music and I read books every evening.'); await page.click('#send'); }
+    else if (await page.locator('#send').count()) { await page.fill('#wr', 'My name is Anna and I am from a small city. I like music and I read books every evening.'); await page.click('#send'); }
     else if (await page.locator('[data-s]').count()) { await page.click('[data-s="0.85"]'); }
     else if (await page.locator('.qcount').count()) { await solve(0); }
     await page.waitForSelector('.emoji-xl', { timeout: 5000 }).catch(() => {});
@@ -139,7 +139,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   await page2.goto(url + '#/welcome');
   await page2.evaluate(() => {
     const s = JP.store.get(); const t = JP.U.today();
-    s.profile = { name: 'Жанель', reasons: ['travel'], selfLevel: 'zero', difficulties: [], daysPerWeek: 7, studyDays: [0, 1, 2, 3, 4, 5, 6], minutesPerDay: 45, bestTime: 'evening', device: 'phone', formats: [], liveLessons: 0, liveDays: [], deadline: null, hasBooks: 'all', tone: 'soft', startedAt: t };
+    s.profile = { name: 'Анна', reasons: ['travel'], selfLevel: 'zero', difficulties: [], daysPerWeek: 7, studyDays: [0, 1, 2, 3, 4, 5, 6], minutesPerDay: 45, bestTime: 'evening', device: 'phone', formats: [], liveLessons: 0, liveDays: [], deadline: null, hasBooks: 'all', tone: 'soft', startedAt: t };
     s.placement = { done: true, stage: 1, by: { 'A1': { n: 8, ok: 2 }, 'A2': { n: 10, ok: 0 }, 'A2+': { n: 6, ok: 0 }, 'B1': { n: 6, ok: 0 } }, wrong: [], answers: [], takenAt: t };
     JP.store.save();
   });
@@ -170,7 +170,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   await page2.goto(url + '#/unit/w-1'); await page2.waitForSelector('#wr');
   await page2.fill('#wr', 'short'); await page2.click('#send');
   ok(await page2.evaluate(() => JP.store.get().writings.length === 0), 'короткий текст не отправляется');
-  await page2.fill('#wr', 'My name is Janelle. I am twenty five years old. I live in a big city and I like music.'); await page2.click('#send'); await page2.waitForSelector('.emoji-xl');
+  await page2.fill('#wr', 'My name is Anna. I am twenty five years old. I live in a big city and I like music.'); await page2.click('#send'); await page2.waitForSelector('.emoji-xl');
   ok(await page2.evaluate(() => JP.store.get().writings.length === 1), 'письменная работа сохранена для преподавателя');
   // этап 2 закрыт, пока не пройден этап 1
   await page2.goto(url + '#/unit/eg-16'); await page2.waitForSelector('h1');
@@ -195,9 +195,9 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   ok(await page2.evaluate(() => JP.E.day(JP.U.today()).budget === 10), 'режим «10 минут» работает');
   // кабинет преподавателя читает файл
   const dump = await page2.evaluate(() => JP.store.exportJSON());
-  require('fs').writeFileSync('/tmp/janelle-export.json', dump);
+  require('fs').writeFileSync('/tmp/b1-export.json', dump);
   await page.goto(url + '#/teacher'); await page.waitForSelector('#f');
-  await page.setInputFiles('#f', '/tmp/janelle-export.json'); await page.waitForSelector('text=Отчёт: Жанель');
+  await page.setInputFiles('#f', '/tmp/b1-export.json'); await page.waitForSelector('text=Отчёт: Анна');
   ok(await page.locator('text=Письменные работы').count() === 1, 'кабинет преподавателя показывает загруженный отчёт');
   ok(await page.evaluate(() => JP.store.get().profile.minutesPerDay === 30), 'после просмотра отчёта собственные данные не затёрты');
   await page2.screenshot({ path: '/tmp/shot-home.png' });

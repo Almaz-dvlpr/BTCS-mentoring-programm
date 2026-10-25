@@ -1,5 +1,5 @@
 (function (JP) {
-  const KEY = 'janelle.platform.v1';
+  const KEY = 'b1.platform.v1';
   const defaults = () => ({
     v: 1, createdAt: Date.now(),
     profile: null,        // answers of the questionnaire
