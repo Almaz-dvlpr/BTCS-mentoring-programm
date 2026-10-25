@@ -50,6 +50,9 @@ const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')))
   ok(await p.locator('text=Анна').count() > 0, 'преподаватель видит ученика в списке');
   await p.fill('#lab', 'Мария'); await p.click('#mk'); await p.waitForSelector('text=Неиспользованные коды');
   ok(await p.locator('text=Мария').count() > 0, 'преподаватель создаёт новый код');
+  await p.fill('#cnt', '5'); await p.fill('#lab', 'Пачка'); await p.click('#mkn'); await p.waitForSelector('text=Запас кодов');
+  ok((await DB(p)).invites.filter(i => /^Пачка/.test(i.label || '')).length === 5, 'создаётся пачка из 5 кодов');
+  ok(await p.locator('#cpall').count() === 1 && await p.locator('#dlall').count() === 1, 'есть «Копировать все» и «Скачать .csv»');
   await p.click('a.card:has-text("Анна")'); await p.waitForSelector('text=ОТЧЁТ ПО УЧЕНИЦЕ');
   ok(await p.locator('text=Что обсудить на следующем занятии').count() === 1, 'карточка ученика показывает его результаты');
   ok(await p.evaluate(() => JP.store.get().profile === null || JP.store.get().profile.name === 'Анна'), 'просмотр чужих данных не подменяет данные браузера');
