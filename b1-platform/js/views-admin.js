@@ -29,7 +29,7 @@
   });
 
   // ---------- Кабинет преподавателя ----------
-  const ago = d => { if (!d) return 'ещё не заходил'; const n = Math.floor((Date.now() - new Date(d).getTime()) / 86400000); return n <= 0 ? 'сегодня' : n === 1 ? 'вчера' : n + ' ' + U.plural(n, 'день', 'дня', 'дней') + ' назад'; };
+  const ago = d => { if (!d) return 'входа ещё не было'; const n = Math.floor((Date.now() - new Date(d).getTime()) / 86400000); return n <= 0 ? 'сегодня' : n === 1 ? 'вчера' : n + ' ' + U.plural(n, 'день', 'дня', 'дней') + ' назад'; };
   const daysSince = d => d ? Math.floor((Date.now() - new Date(d).getTime()) / 86400000) : 999;
 
   function loginForm(note) {
@@ -61,8 +61,8 @@
       const quiet = daysSince(s.last_seen) >= 3;
       return `<a class="card" href="#/admin/s/${s.id}" style="display:block;text-decoration:none;color:inherit"><div class="row between"><b style="font-size:1.1rem">${esc(s.name)}</b>${quiet ? '<span class="chip warm">⚠ нет активности</span>' : ''}</div>
         ${m.onboarded ? `<div style="margin:8px 0">${ui.bar(m.progress)}</div><div class="row between"><small class="muted">${Math.round(m.progress * 100)}% · этап ${m.stage} (${m.level})</small><small class="muted">🔥 ${m.streak}</small></div>
-        <small class="muted">неделя: ${m.weekMin} из ${m.goalMin} мин · точность ${m.acc == null ? '—' : Math.round(m.acc * 100) + '%'} · слов ${m.words}</small><br>` : '<p class="muted" style="margin:6px 0">Ещё не прошёл знакомство</p>'}
-        <small class="muted">заходил: ${ago(s.last_seen)}</small></a>`;
+        <small class="muted">неделя: ${m.weekMin} из ${m.goalMin} мин · точность ${m.acc == null ? '—' : Math.round(m.acc * 100) + '%'} · слов ${m.words}</small><br>` : '<p class="muted" style="margin:6px 0">Знакомство ещё не пройдено</p>'}
+        <small class="muted">последний вход: ${ago(s.last_seen)}</small></a>`;
     }).join('') || '<div class="card muted">Пока нет учеников. Создайте код и отправьте ученику.</div>';
     const inv = invites.map(i => `<div class="list-item"><span class="grow"><b style="letter-spacing:.08em">${esc(i.code)}</b><br><small class="muted">${esc(i.label || 'без подписи')}${i.student_id ? ' · восстановление' : ''} · ${ago(i.created_at)}</small></span><button class="btn small" data-copy="${esc(i.code)}">Копировать</button><button class="icon-btn" data-del="${esc(i.code)}" aria-label="Удалить код">🗑</button></div>`).join('');
     ui.set(`<div class="row between"><h1 style="margin:0">Кабинет преподавателя</h1><button class="btn small ghost" id="out">Выйти</button></div>
@@ -96,7 +96,7 @@
     ui.set('<p class="muted">Загружаю…</p>', { noTabs: true });
     let st; try { st = (await C.students()).find(s => s.id === id); } catch (x) { return ui.set(`<div class="card">${esc(C.err(x))}</div>`, { noTabs: true }); }
     if (!st) return ui.go('#/admin');
-    const rep = st.state && st.state.units ? JP.teacherReport(st.state) : '<div class="card muted">Ученик ещё не начал занятия.</div>';
+    const rep = st.state && st.state.units ? JP.teacherReport(st.state) : '<div class="card muted">Занятия ещё не начаты.</div>';
     ui.set(`<a href="#/admin" class="muted">← все ученики</a><h1>${esc(st.name)}</h1><p class="muted">Последняя активность: ${ago(st.last_seen)}${st.state_updated ? ' · данные от ' + U.fmt(st.state_updated.slice(0, 10)) : ''}</p>
       <div class="row" style="margin-bottom:12px"><button class="btn" id="rec">🔑 Код восстановления</button><button class="btn" id="exp">⬇️ Скачать данные</button><button class="btn ghost" id="del" style="color:var(--bad)">Удалить ученика</button></div><div id="newcode"></div>${rep}`, { noTabs: true });
     ui.$('#rec').onclick = async () => { try { const code = await C.createInvite('восстановление: ' + st.name, st.id); showCode(code); U.toast('Код создан: ученик войдёт на новом устройстве'); } catch (x) { U.toast(C.err(x)); } };

@@ -250,7 +250,7 @@
         const stg = +task.ref; const prev = S().stageTests[stg] || {}; const tries = (prev.tries || 0) + 1;
         const pass = score >= 0.7;
         S().stageTests[stg] = { passed: pass, waived: !pass && tries >= 2, score, tries, date: U.today() };
-        extra = pass && stg === 4 ? `<div class="card soft"><h3>🎓 Ты прошла весь маршрут к B1!</h3><p>Что дальше: пробный экзамен уровня B1 (например, Cambridge B1 Preliminary), разговорная практика с преподавателем и следующий уровень — English Vocabulary in Use: Pre-intermediate and Intermediate.</p></div>`
+        extra = pass && stg === 4 ? `<div class="card soft"><h3>🎓 Маршрут к B1 пройден!</h3><p>Что дальше: пробный экзамен уровня B1 (например, Cambridge B1 Preliminary), разговорная практика с преподавателем и следующий уровень — English Vocabulary in Use: Pre-intermediate and Intermediate.</p></div>`
           : pass ? `<div class="card soft"><b>Этап ${stg} пройден!</b> Открывается этап ${stg + 1}: «${esc(D.stages[stg].title)}».</div>`
           : tries >= 2 ? `<div class="card warm">Результат пока ниже 70%, но мы пойдём дальше: слабые темы уже в повторении, и они будут возвращаться.</div>`
             : `<div class="card warm">Нужно 70%, чтобы открыть следующий этап. Слабые темы я поставила на повторение — через пару дней пересдадим тест.</div>`;

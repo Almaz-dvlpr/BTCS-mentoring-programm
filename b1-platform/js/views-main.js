@@ -131,7 +131,7 @@
       cols += `<div class="hm-col">${col}</div>`;
     }
     const labels = ['Пн', '', 'Ср', '', 'Пт', '', 'Вс'].map(l => `<span>${l}</span>`).join('');
-    return `<div class="d-card"><div class="row between"><div><h2 class="d-h2">Календарь занятий</h2><small class="muted">12 недель · занималась ${n} ${U.plural(n, 'день', 'дня', 'дней')}</small></div><div class="d-legend" style="margin:0">Меньше <i class="hm l1"></i><i class="hm l2"></i><i class="hm l3"></i><i class="hm l4"></i> больше</div></div><div class="hm-wrap"><div class="hm-lab">${labels}</div><div class="hm-grid">${cols}</div></div></div>`;
+    return `<div class="d-card"><div class="row between"><div><h2 class="d-h2">Календарь занятий</h2><small class="muted">12 недель · дней с занятиями: ${n}</small></div><div class="d-legend" style="margin:0">Меньше <i class="hm l1"></i><i class="hm l2"></i><i class="hm l3"></i><i class="hm l4"></i> больше</div></div><div class="hm-wrap"><div class="hm-lab">${labels}</div><div class="hm-grid">${cols}</div></div></div>`;
   }
   ui.route('/progress', () => {
     const p = S().profile, prog = E.progress(), est = E.estimate(), wk = E.weekStats(), acc = E.avgAccuracy();
