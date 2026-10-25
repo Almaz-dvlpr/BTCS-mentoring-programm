@@ -14,17 +14,19 @@
     settings: { sound: true },
     seen: {}              // misc one-off flags (welcome messages etc.)
   });
-  let state = load();
+  let state = load(); let swapped = false;
   function load() {
     try { const s = localStorage.getItem(KEY); if (s) return Object.assign(defaults(), JSON.parse(s)); } catch (e) {}
     return defaults();
   }
   JP.store = {
     get: () => state,
-    save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} },
+    save() { if (swapped) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} },
     reset() { state = defaults(); this.save(); },
     // временно подставить чужие данные (кабинет преподавателя); возвращает функцию отката
-    swap(obj) { const old = state; state = Object.assign(defaults(), obj); return () => { state = old; }; },
+    swap(obj) { const old = state; state = Object.assign(defaults(), obj); swapped = true; return () => { state = old; swapped = false; }; },
+    isSwapped: () => swapped,
+    importObj(obj) { state = Object.assign(defaults(), obj); this.save(); },
     exportJSON() { return JSON.stringify(state, null, 1); },
     importJSON(txt) { const o = JSON.parse(txt); if (!o || typeof o !== 'object' || !('units' in o)) throw new Error('bad'); state = Object.assign(defaults(), o); this.save(); }
   };

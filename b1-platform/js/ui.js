@@ -32,9 +32,11 @@
   ui.dispatch = () => {
     let path = decodeURIComponent((location.hash || '#/').replace(/^#/, '').split('?')[0]) || '/';
     const st = S();
-    const free = ['/teacher', '/welcome'];
-    if (!st.profile && path !== '/welcome' && path !== '/teacher') { path = '/welcome'; history.replaceState(null, '', '#/welcome'); }
-    else if (st.profile && !(st.placement && st.placement.done) && !['/placement', '/teacher'].includes(path)) { path = '/placement'; history.replaceState(null, '', '#/placement'); }
+    const open = p => p === '/teacher' || p === '/login' || p.startsWith('/admin');
+    const C = JP.cloud; const needLogin = !!(C && C.enabled && !C.token());
+    if (!st.profile && !open(path) && path !== '/welcome') { path = needLogin ? '/login' : '/welcome'; history.replaceState(null, '', '#' + path); }
+    else if (!st.profile && path === '/welcome' && needLogin) { path = '/login'; history.replaceState(null, '', '#/login'); }
+    else if (st.profile && !(st.placement && st.placement.done) && !open(path) && path !== '/placement') { path = '/placement'; history.replaceState(null, '', '#/placement'); }
     for (const r of ui.routes) {
       const m = path.match(r.re); if (!m) continue;
       const params = {}; r.keys.forEach((k, i) => { params[k] = m[i + 1]; });

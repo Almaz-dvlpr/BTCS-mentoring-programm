@@ -191,6 +191,7 @@
         <button class="btn primary block" id="save">Сохранить</button></div>
       <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
       <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
+      ${JP.cloud && JP.cloud.token() ? `<div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>. Прогресс сохраняется на сервере автоматически${JP.cloud.status === 'ok' ? ' ✓' : JP.cloud.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : JP.cloud.status === 'revoked' ? ' — доступ отозван, обратитесь к преподавателю' : ''}.</p><button class="btn" id="logout">Выйти на этом устройстве</button><p class="muted" style="font-size:.85rem;margin-bottom:0">Чтобы войти снова, понадобится новый код от преподавателя.</p></div>` : ''}
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
         <div class="row"><button class="btn" id="exp">⬇️ Скачать прогресс</button><button class="btn" id="imp">⬆️ Загрузить</button><input type="file" id="file" accept=".json" hidden></div>
         <details style="margin-top:12px"><summary>Начать заново</summary><p class="muted">Удалит все ответы, прогресс и тексты на этом устройстве.</p><button class="btn" style="color:var(--bad)" id="reset">Удалить всё</button></details></div>
@@ -209,6 +210,7 @@
       const d = E.day(U.today()); d.built = false; JP.store.save(); U.toast('Сохранено ✓'); upd();
     };
     ui.$('#ics').onclick = () => ui.download('put-k-b1.ics', E.icsFor(), 'text/calendar');
+    const lo = ui.$('#logout'); if (lo) lo.onclick = async () => { if (confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, но для входа понадобится новый код.')) { await JP.cloud.flush(); JP.cloud.logoutStudent(); JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); } };
     ui.$('#snd').onchange = e => { S().settings.sound = e.target.checked; JP.store.save(); };
     ui.$('#exp').onclick = () => ui.download('progress-' + U.today() + '.json', JP.store.exportJSON(), 'application/json');
     ui.$('#imp').onclick = () => ui.$('#file').click();
@@ -233,16 +235,27 @@
     L.push(`Цели: ${(p.reasons || []).join(', ')}; трудности: ${(p.difficulties || []).join(', ')}`);
     return L.join('\n');
   }
+  function reportBlock() {
+      return `<div class="card"><div class="row"><button class="btn small" id="copy">📋 Скопировать краткий отчёт</button></div><pre class="report" id="txt">${esc(textReport())}</pre></div>
+        ${suggestions()}${reportHtml(true)}${profileBlock()}`;
+    }
+  // отчёт по произвольным данным ученика (из файла или из базы)
+  JP.teacherReport = obj => { const restore = JP.store.swap(obj); E.invalidate(); try { return reportBlock(); } finally { restore(); E.invalidate(); } };
+  JP.studentSummary = obj => {
+    const restore = JP.store.swap(obj); E.invalidate();
+    try {
+      const p = S().profile; if (!p) return { onboarded: false };
+      const wk = E.weekStats(), last = Object.keys(S().days).filter(d => (S().days[d].minutes || 0) > 0).sort().pop() || null;
+      const st = E.currentStage();
+      return { onboarded: true, progress: E.progress(), stage: st, level: D.stages[st - 1].level, streak: E.streak(), weekMin: wk.minutes, goalMin: wk.goalMin, acc: E.avgAccuracy(), lastStudy: last, placed: !!(S().placement && S().placement.done), words: E.learnedWords() };
+    } finally { restore(); E.invalidate(); }
+  };
   ui.route('/teacher', () => {
     const has = !!S().profile;
     ui.set(`<a href="#/" class="muted">← на главную</a><h1>Кабинет преподавателя</h1>
       <div class="card soft"><b>Как это работает.</b> Прогресс ученика хранится в его браузере. Чтобы увидеть его, она нажимает «Скачать прогресс» (раздел «Ещё»), отправляет вам файл, а вы загружаете его здесь. Ничего не уходит на сторонние серверы.</div>
       <div class="card"><h3>Загрузить отчёт ученицы</h3><input type="file" id="f" accept=".json"><p class="muted" id="msg"></p></div>
       <div id="rep">${has ? '<h2>Данные этого устройства</h2>' + reportBlock() : ''}</div>`);
-    function reportBlock() {
-      return `<div class="card"><div class="row"><button class="btn small" id="copy">📋 Скопировать краткий отчёт</button></div><pre class="report" id="txt">${esc(textReport())}</pre></div>
-        ${suggestions()}${reportHtml(true)}${profileBlock()}`;
-    }
     ui.$('#f').onchange = e => {
       const f = e.target.files[0]; if (!f) return;
       const r = new FileReader(); r.onload = () => {

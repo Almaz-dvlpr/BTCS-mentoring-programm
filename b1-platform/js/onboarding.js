@@ -63,7 +63,7 @@
     function widget(s) {
       if (s.type === 'text') {
         ans.innerHTML = `<div class="row"><input type="text" id="in" value="${esc(s.def || '')}" maxlength="40" aria-label="Ответ" class="grow"><button class="btn primary" id="ok">Дальше</button></div>`;
-        const inp = ui.$('#in'); inp.focus(); inp.select();
+        const inp = ui.$('#in'); if (!inp.value && S().seen.cloudName) inp.value = S().seen.cloudName; inp.focus(); inp.select();
         const go = () => { const v = inp.value.trim(); if (!v) { inp.focus(); return; } submit(s, v); };
         ui.$('#ok').onclick = go; inp.onkeydown = e => { if (e.key === 'Enter') go(); };
       } else if (s.type === 'single') {

@@ -28,7 +28,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, reducedMotion: 'reduce' });
   const page = await ctx.newPage();
-  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_NAME|ERR_INTERNET/.test(m.text())) errors.push(m.text()); });
   await page.goto(url);
   await page.waitForSelector('#chat');
   ok(page.url().endsWith('#/welcome'), 'пустой профиль → знакомство');
