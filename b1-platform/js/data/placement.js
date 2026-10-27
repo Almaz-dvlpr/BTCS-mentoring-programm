@@ -16,7 +16,7 @@ JP.data.placement = [
   { l: 'A2', q: 'We ___ dinner when the phone rang.', o: ['had', 'were having', 'have'], a: 1, u: 'eg-15' },
   { l: 'A2', q: 'Look at the sky! It ___ rain.', o: ['will', 'is going to', 'shall'], a: 1, u: 'eg-27' },
   { l: 'A2', q: "You ___ wear a seatbelt. It's the law.", o: ['should', 'have to', 'might'], a: 1, u: 'eg-34' },
-  { l: 'A2', q: "'I can't find my keys.' – 'I ___ help you look for them.'", o: ['help', 'will help', 'am helping'], a: 1, u: 'eg-28' },
+  { l: 'A2', q: "'I can't find my keys.' – 'I ___ you look for them.'", o: ['help', 'will help', 'am helping'], a: 1, u: 'eg-28' },
   { l: 'A2', q: 'My sister is ___ than me.', o: ['tall', 'taller', 'more tall'], a: 1, u: 'eg-88' },
   { l: 'A2', q: 'Have you ___ been to London?', o: ['ever', 'yet', 'already'], a: 0, u: 'eg-18' },
   { l: 'A2', q: "There isn't ___ milk in the fridge.", o: ['some', 'any', 'no'], a: 1, u: 'eg-77' },

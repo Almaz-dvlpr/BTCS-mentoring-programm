@@ -131,7 +131,7 @@
 <p><b>will + глагол</b> — решение в момент речи, обещание, предложение помощи, предсказание. <q>I'll help you.</q> <q>I'll call you tomorrow.</q> <q>I think it will rain.</q></p>
 <p>Отрицание: <b>won't</b> (will not). <b>Shall I…? / Shall we…?</b> — предложение: <q>Shall I open the window?</q> <q>Where shall we meet?</q></p>`, [
     gap('"I can\'t open the door." "I ___ help you."', 'will'),
-    mc('"It\'s cold." "OK, I ___ close the window."', ['will', 'am going to', 'close'], 0),
+    mc('"It\'s cold." "OK, I ___ close the window."', ['will', 'closed', 'closing'], 0, 'Решение принято прямо сейчас — will.'),
     gap('___ I open the window?', 'Shall'),
     gap('I promise I ___ (not / tell) anyone.', "won't tell|will not tell"),
     ord('I will call you tomorrow.'),
