@@ -40,6 +40,7 @@ window.supabase = { createClient() { save(load()); return {
 // signUp в имитации должен знать пароль: переопределяем аккуратно
 const FAKE2 = FAKE.replace("signUp: async ({ email }) => { const db = load(); if (!db.users[email]) { db.users[email] = { id: 'u' + (++db.n), password: arguments[0] && 0, confirmed: false }; } db.users[email].password = db.users[email].password || null; db.outbox.push({ to: email, kind: 'confirm' }); save(db); return { data: { session: null, user: {} }, error: null }; },",
   "signUp: async ({ email, password }) => { const db = load(); if (!db.users[email]) db.users[email] = { id: 'u' + (++db.n), password, confirmed: false }; db.outbox.push({ to: email, kind: 'confirm' }); save(db); return { data: { session: null, user: {} }, error: null }; },");
+const FONTS = () => { const set = new Set(); document.querySelectorAll('body *').forEach(e => { if (!e.childNodes.length || !Array.from(e.childNodes).some(n => n.nodeType === 3 && n.textContent.trim())) return; if (e.closest('script,style,pre')) return; set.add(getComputedStyle(e).fontFamily); }); return [...set]; };
 const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')));
 const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.getItem('__mockdb')); new Function('db', f)(db); localStorage.setItem('__mockdb', JSON.stringify(db)); }, fn);
 (async () => {
@@ -114,6 +115,7 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   await p.fill('#em', 'almirzhan@gmail.com'); await p.fill('#pw', 'wrong'); await p.click('#in'); await p.waitForSelector('#msg:has-text("Неверный")'); ok(true, 'неверный пароль преподавателя отклоняется');
   await p.fill('#pw', 'secret123'); await p.click('#in'); await p.waitForSelector('.adm-side');
   ok(await p.locator('.adm-side nav a').count() === 4 && await p.locator('text=Требуют внимания').count() === 1, 'после входа открывается обзор с разделами «Обзор / Ученики / Коды / Глазами ученика»');
+  { const f = await p.evaluate(FONTS); ok(f.length === 1 && !/Times|Georgia/i.test(f[0]), 'в кабинете один шрифт на всех элементах: ' + f.length + ' вариант(а)'); }
   await p.click('.adm-side nav a:has-text("Ученики")'); await p.waitForSelector('#list .adm-tr');
   ok(await p.locator('#list .adm-tr:has-text("Мария")').count() === 1 && await p.locator('text=maria@mail.com').count() > 0, 'в списке ученик виден с подтверждённым email');
   await p.fill('#q', 'maria@'); ok(await p.locator('#list .adm-tr').count() === 1, 'поиск по email работает'); await p.fill('#q', 'нет такого'); await p.waitForSelector('text=Никого не нашли'); await p.fill('#q', '');
@@ -143,7 +145,8 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   ok(await v.evaluate(() => JP.store.get().profile.name === 'Тестовый ученик' && Object.keys(JP.store.get().units).length >= 20), 'тестовый ученик с готовым прогрессом открывается без входа');
   await v.goto(url + '?preview=demo#/unit/mu-9'); await v.waitForSelector('h1'); ok(await v.locator('text=пока закрыт').count() === 0 && await v.locator('h1:has-text("Present perfect continuous")').count() === 1, 'в режиме просмотра открыт любой этап (урок B1 доступен)');
   await v.goto(url + '#/'); await v.waitForSelector('#linkbanner'); ok(await v.locator('#linkbanner:has-text("Привяжите email")').count() === 1, 'в режиме просмотра преподаватель видит напоминание «Привяжите email»');
-  await v.goto(url + '#/progress'); await v.waitForSelector('.dash'); ok(await v.locator('.dash:has-text("Календарь занятий")').count() === 1, 'у тестового ученика заполнен дашборд прогресса');
+  await v.goto(url + '#/progress'); await v.waitForSelector('.dash');
+  { const f = await v.evaluate(FONTS); ok(f.length === 1 && !/Times|Georgia/i.test(f[0]), 'в дашборде ученика один шрифт на всех элементах (включая заголовки и подписи): ' + f.length + ' вариант(а)'); } ok(await v.locator('.dash:has-text("Календарь занятий")').count() === 1, 'у тестового ученика заполнен дашборд прогресса');
   await v.evaluate(async () => { JP.E.completeUnit('eg-2', 0.5); JP.store.save(); await JP.cloud.flush(); });
   const after = await DB(p); ok(after.pushes === pushes0, 'действия в режиме просмотра не отправляются на сервер');
   ok((await p.evaluate(() => localStorage.getItem('b1.platform.v1'))) === own, 'настоящие данные браузера не затронуты');
