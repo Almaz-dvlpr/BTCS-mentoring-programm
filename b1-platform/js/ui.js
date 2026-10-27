@@ -33,7 +33,7 @@
     let path = decodeURIComponent((location.hash || '#/').replace(/^#/, '').split('?')[0]) || '/';
     const st = S();
     const open = p => p === '/teacher' || p === '/login' || p.startsWith('/admin');
-    const C = JP.cloud; const needLogin = !!(C && C.enabled && !C.token());
+    const C = JP.cloud; const needLogin = !!(C && C.enabled && !C.hasAccess());
     if (!st.profile && !open(path) && path !== '/welcome') { path = needLogin ? '/login' : '/welcome'; history.replaceState(null, '', '#' + path); }
     else if (!st.profile && path === '/welcome' && needLogin) { path = '/login'; history.replaceState(null, '', '#/login'); }
     else if (st.profile && !(st.placement && st.placement.done) && !open(path) && path !== '/placement') { path = '/placement'; history.replaceState(null, '', '#/placement'); }

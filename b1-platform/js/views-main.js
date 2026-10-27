@@ -192,17 +192,23 @@
         <button class="btn primary block" id="save">Сохранить</button></div>
       <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
       <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
-      <div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>${S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : ''}${JP.cloud && JP.cloud.token() ? '. Прогресс сохраняется на сервере автоматически' + (JP.cloud.status === 'ok' ? ' ✓' : JP.cloud.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : JP.cloud.status === 'revoked' ? ' — доступ отозван, войдите снова' : '') + '.' : ' (без входа: данные только на этом устройстве).'}</p>
-        ${JP.cloud && JP.cloud.token() && !S().seen.cloudLogin ? `<div class="card soft" id="setpw"><b>Задайте логин и пароль</b><p class="muted" style="margin:4px 0 8px">Чтобы входить с любого устройства, не дожидаясь нового кода.</p>
-          <input type="text" id="nl" placeholder="Логин" autocapitalize="off" style="margin-bottom:8px"><input type="password" id="np" placeholder="Пароль, не короче 8 символов" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px"><div id="pmsg" style="color:var(--bad);min-height:1.2em"></div><button class="btn primary" id="savepw">Сохранить</button></div>` : ''}
-        ${JP.cloud && JP.cloud.token() && S().seen.cloudLogin ? `<details class="card soft" id="chpw"><summary>Сменить пароль</summary>
-          <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin:8px 0">
-          <input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px">
-          <input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px">
-          <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button>
-          <p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></details>` : ''}
-        <div class="row"><button class="btn" id="logout">Выйти</button><a class="btn ghost" href="#/admin">Вход для преподавателя</a></div>
-        <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по логину и паролю.</p></div>
+      ${(() => {
+        const C = JP.cloud, authed = !!(C && C.authed), legacy = !!(C && C.token() && !authed), PW = 'width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px';
+        const who = authed ? ' (' + esc(S().seen.cloudEmail || C.email || '') + ')' : S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : '';
+        const status = (authed || legacy) ? 'Прогресс сохраняется на сервере автоматически' + (C.status === 'ok' ? ' ✓' : C.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : C.status === 'revoked' ? ' — доступ отозван, войдите снова' : '') + '.' : 'Вход не выполнен: данные только на этом устройстве.';
+        const pend = C && C.pending && C.pending(); const waiting = legacy && pend && pend.legacyToken && pend.email;
+        return `<div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>${who}. ${status}</p>
+          ${legacy ? (waiting ? `<div class="card soft" id="linkbox"><b>Подтвердите почту</b><p class="muted" style="margin:4px 0 8px">Мы отправили письмо на ${esc(pend.email)}. Перейдите по ссылке в письме, затем введите пароль и завершите привязку.</p>
+              <input type="password" id="lp" placeholder="Пароль, который вы указали" autocomplete="current-password" style="${PW}"><div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><div class="row"><button class="btn primary" id="finlink">Завершить привязку</button><button class="btn ghost" id="cancellink">Отмена</button></div></div>`
+            : `<div class="card soft" id="linkbox"><b>Привяжите email</b><p class="muted" style="margin:4px 0 8px">Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.</p>
+              <input type="text" id="le" placeholder="Email" inputmode="email" autocapitalize="off" style="${PW}"><input type="password" id="lp" placeholder="Придумайте пароль (от 8 символов)" autocomplete="new-password" style="${PW}"><input type="password" id="lp2" placeholder="Повторите пароль" autocomplete="new-password" style="${PW}">
+              <div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><button class="btn primary" id="sendlink">Отправить письмо для подтверждения</button></div>`) : ''}
+          ${(authed || (legacy && S().seen.cloudLogin)) ? `<details class="card soft" id="chpw"><summary>Сменить пароль</summary>
+            <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="${PW};margin-top:8px"><input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="${PW}"><input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="${PW}">
+            <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button><p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></details>` : ''}
+          <div class="row"><button class="btn" id="logout">Выйти</button><a class="btn ghost" href="#/admin">Вход для преподавателя</a></div>
+          <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по email и паролю.</p></div>`;
+      })()}
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
         <div class="row"><button class="btn" id="exp">⬇️ Скачать прогресс</button><button class="btn" id="imp">⬆️ Загрузить</button><input type="file" id="file" accept=".json" hidden></div>
         <details style="margin-top:12px"><summary>Начать заново</summary><p class="muted">Удалит все ответы, прогресс и тексты на этом устройстве.</p><button class="btn" style="color:var(--bad)" id="reset">Удалить всё</button></details></div>
@@ -221,7 +227,7 @@
       const d = E.day(U.today()); d.built = false; JP.store.save(); U.toast('Сохранено ✓'); upd();
     };
     ui.$('#ics').onclick = () => ui.download('put-k-b1.ics', E.icsFor(), 'text/calendar');
-    ui.$('#logout').onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, вход — по логину и паролю.')) return; if (JP.cloud && JP.cloud.token()) { await JP.cloud.flush(); await JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
+    ui.$('#logout').onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, вход — по email и паролю.')) return; if (JP.cloud && JP.cloud.hasAccess()) { await JP.cloud.flush(); await JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
     const cp = ui.$('#savechpw'); if (cp) cp.onclick = async () => {
       const m = ui.$('#cmsg'), v = id => ui.$('#' + id).value; m.style.color = 'var(--bad)';
       if (!v('op')) { m.textContent = 'Введите текущий пароль.'; return; }
@@ -233,7 +239,15 @@
       catch (x) { m.textContent = /bad_credentials/.test(x.message) ? 'Текущий пароль указан неверно.' : JP.cloud.err(x); }
       cp.disabled = false;
     };
-    const sp = ui.$('#savepw'); if (sp) sp.onclick = async () => { const m = ui.$('#pmsg'); try { await JP.cloud.setCredentials(ui.$('#nl').value.trim(), ui.$('#np').value); U.toast('Логин и пароль сохранены'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); } };
+    const sl = ui.$('#sendlink'); if (sl) sl.onclick = async () => {
+      const m = ui.$('#lmsg'), v = id => ui.$('#' + id).value.trim(); const em = v('le').toLowerCase(), pw = ui.$('#lp').value;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) { m.textContent = 'Проверьте адрес email.'; return; } if (pw.length < 8) { m.textContent = 'Пароль должен быть не короче 8 символов.'; return; } if (pw !== ui.$('#lp2').value) { m.textContent = 'Пароли не совпадают.'; return; }
+      sl.disabled = true; m.textContent = '';
+      try { const r = await JP.cloud.linkEmail(em, pw); U.toast(r.confirmed ? 'Email привязан' : 'Письмо отправлено'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); sl.disabled = false; }
+    };
+    const fl = ui.$('#finlink'); if (fl) fl.onclick = async () => { const m = ui.$('#lmsg'); fl.disabled = true; m.textContent = '';
+      try { await JP.cloud.finishLink(ui.$('#lp').value); U.toast('Email привязан. Теперь входите по email и паролю'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); fl.disabled = false; } };
+    const cl = ui.$('#cancellink'); if (cl) cl.onclick = () => { localStorage.removeItem('b1.pending'); ui.dispatch(); };
     ui.$('#snd').onchange = e => { S().settings.sound = e.target.checked; JP.store.save(); };
     ui.$('#exp').onclick = () => ui.download('progress-' + U.today() + '.json', JP.store.exportJSON(), 'application/json');
     ui.$('#imp').onclick = () => ui.$('#file').click();
