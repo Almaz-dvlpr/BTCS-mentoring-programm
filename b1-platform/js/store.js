@@ -3,7 +3,7 @@
   let previewInfo = null;
   try {
     const q = new URLSearchParams(location.search);
-    if (q.get('preview')) { previewInfo = { kind: q.get('preview'), name: q.get('as') || '' }; sessionStorage.setItem('b1.preview', JSON.stringify(previewInfo)); history.replaceState(null, '', location.pathname + location.hash); }
+    if (q.get('preview')) { previewInfo = { kind: q.get('preview'), name: q.get('as') || '', noemail: q.get('noemail') === '1' }; sessionStorage.setItem('b1.preview', JSON.stringify(previewInfo)); history.replaceState(null, '', location.pathname + location.hash); }
     else { const p = sessionStorage.getItem('b1.preview'); if (p) previewInfo = JSON.parse(p); }
   } catch (e) {}
   JP.preview = previewInfo;

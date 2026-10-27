@@ -229,7 +229,7 @@
       else if (kind === 'student' && st && st.state && st.state.units) localStorage.setItem('b1.preview.v1', JSON.stringify(st.state));
       else localStorage.removeItem('b1.preview.v1');
     } catch (e) { return U.toast('Не удалось подготовить просмотр'); }
-    const u = siteUrl() + '?preview=' + kind + (st ? '&as=' + encodeURIComponent(st.name) : '') + '#/';
+    const u = siteUrl() + '?preview=' + kind + (st ? '&as=' + encodeURIComponent(st.name) + (st.email ? '' : '&noemail=1') : '') + '#/';
     if (!window.open(u, '_blank')) location.href = u;
   }
   ui.route('/admin/preview', () => guard('/admin/preview', 'Глазами ученика', (d, out) => {

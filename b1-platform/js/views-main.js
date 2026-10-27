@@ -19,7 +19,7 @@
       <div class="row between"><div><small class="muted">${U.parse(U.today()).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</small><h1>Привет, ${esc(p.name)}!</h1></div>
         <span class="chip warm" title="Занятий подряд по расписанию">🔥 ${streak}</span></div>
       <div class="card"><div class="amy"><div class="avatar">🙂</div><div class="bubble" style="box-shadow:none;border:0;padding:0;background:transparent">${esc(A.homeMessage(day))}</div></div></div>
-      ${(() => { const C = JP.cloud; if (!(C && C.enabled && C.token() && !C.authed)) return ''; if ((S().seen.linkSnooze || '') > U.today()) return ''; const pend = C.pending && C.pending();
+      ${(() => { const C = JP.cloud; const demo = JP.preview && (JP.preview.kind === 'demo' || JP.preview.noemail); if (!demo && !(C && C.enabled && C.token() && !C.authed)) return ''; if ((S().seen.linkSnooze || '') > U.today()) return ''; const pend = C.pending && C.pending();
         return `<div class="card warm" id="linkbanner"><div class="row between"><b>📧 ${pend && pend.legacyToken ? 'Завершите привязку email' : 'Привяжите email'}</b><button class="icon-btn" id="snooze" aria-label="Напомнить позже">✕</button></div>
           <p class="muted" style="margin:6px 0 10px">${pend && pend.legacyToken ? 'Подтвердите почту по письму и завершите привязку.' : 'Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.'}</p><a class="btn primary small" href="#/more">${pend && pend.legacyToken ? 'Завершить' : 'Привязать email'}</a></div>`; })()}
       <div class="card"><div class="row between"><h2 style="margin:0">Сегодня</h2><small class="muted">${doneN} из ${day.tasks.length}</small></div>

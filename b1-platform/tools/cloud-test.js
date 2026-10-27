@@ -142,6 +142,7 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   ok(await v.locator('#previewbar:has-text("все этапы открыты")').count() === 1, 'сверху заметная полоса «режим просмотра»');
   ok(await v.evaluate(() => JP.store.get().profile.name === 'Тестовый ученик' && Object.keys(JP.store.get().units).length >= 20), 'тестовый ученик с готовым прогрессом открывается без входа');
   await v.goto(url + '?preview=demo#/unit/mu-9'); await v.waitForSelector('h1'); ok(await v.locator('text=пока закрыт').count() === 0 && await v.locator('h1:has-text("Present perfect continuous")').count() === 1, 'в режиме просмотра открыт любой этап (урок B1 доступен)');
+  await v.goto(url + '#/'); await v.waitForSelector('#linkbanner'); ok(await v.locator('#linkbanner:has-text("Привяжите email")').count() === 1, 'в режиме просмотра преподаватель видит напоминание «Привяжите email»');
   await v.goto(url + '#/progress'); await v.waitForSelector('.dash'); ok(await v.locator('.dash:has-text("Календарь занятий")').count() === 1, 'у тестового ученика заполнен дашборд прогресса');
   await v.evaluate(async () => { JP.E.completeUnit('eg-2', 0.5); JP.store.save(); await JP.cloud.flush(); });
   const after = await DB(p); ok(after.pushes === pushes0, 'действия в режиме просмотра не отправляются на сервер');
