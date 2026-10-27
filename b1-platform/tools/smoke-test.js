@@ -135,7 +135,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
 
   // ---------- Сценарий 2: новичок, все типы занятий ----------
   const page2 = await (await browser.newContext({ viewport: { width: 390, height: 800 }, reducedMotion: 'reduce' })).newPage();
-  page2.on('pageerror', e => errors.push('p2: ' + e.message)); page2.on('console', m => { if (m.type() === 'error') errors.push('p2: ' + m.text()); });
+  page2.on('pageerror', e => errors.push('p2: ' + e.message)); page2.on('console', m => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_NAME|ERR_INTERNET/.test(m.text())) errors.push('p2: ' + m.text()); });
   await page2.goto(url + '#/welcome');
   await page2.evaluate(() => {
     const s = JP.store.get(); const t = JP.U.today();
