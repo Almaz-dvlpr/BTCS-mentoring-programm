@@ -66,65 +66,153 @@
       try { await C.signUp(em, pw); msg.style.color = 'var(--ok)'; msg.textContent = 'Готово. Проверьте почту, подтвердите адрес и затем войдите с этим паролем.'; } catch (x) { msg.style.color = 'var(--bad)'; msg.textContent = C.err(x); } };
   }
 
-  ui.route('/admin', async () => {
+  // ---------- Данные кабинета (кэш на 30 секунд) ----------
+  const siteUrl = () => location.origin + '/';
+  const inviteText = (code, name) => `${name ? name + ', здравствуйте!' : 'Здравствуйте!'} Приглашаю на занятия английским с виртуальным ассистентом.\n1. Откройте ${siteUrl()}#/login?code=${String(code).replace(/-/g, '')}\n2. Впишите своё имя, придумайте логин и пароль.\nКод приглашения: ${code} (действует один раз).`;
+  function copy(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => U.toast(t.includes('\n') && t.length > 60 ? 'Скопировано' : 'Скопировано: ' + t), () => U.toast('Не удалось скопировать')); }
+  function share(text) { if (navigator.share) navigator.share({ text }).catch(() => {}); else copy(text); }
+  let cache = null;
+  async function load(force) {
+    if (!force && cache && Date.now() - cache.at < 30000) return cache;
+    const [students, invites] = await Promise.all([C.students(), C.invitesAll()]);
+    students.forEach(st => { st.sum = st.state && st.state.units ? JP.studentSummary(st.state) : { onboarded: false }; });
+    return (cache = { at: Date.now(), students, invites });
+  }
+  const NAV = [['#/admin', '📊', 'Обзор', p => p === '/admin'], ['#/admin/students', '👥', 'Ученики', p => p === '/admin/students' || p.startsWith('/admin/s/')], ['#/admin/codes', '🔑', 'Коды', p => p === '/admin/codes']];
+  function shell(path, title, body, o) {
+    o = o || {};
+    ui.set(`<div class="adm"><aside class="adm-side"><div class="adm-brand">Путь к B1<small>кабинет преподавателя</small></div>
+        <nav>${NAV.map(n => `<a href="${n[0]}" class="${n[3](path) ? 'on' : ''}"><span>${n[1]}</span>${n[2]}${n[2] === 'Коды' && cache ? `<em>${cache.invites.filter(i => !i.used_at && !i.student_id).length}</em>` : ''}${n[2] === 'Ученики' && cache ? `<em>${cache.students.length}</em>` : ''}</a>`).join('')}</nav>
+        <div class="adm-foot"><button class="btn small ghost" id="out">Выйти</button></div></aside>
+      <main class="adm-main"><header class="adm-top"><h1>${title}</h1><div class="row">${o.actions || ''}<button class="btn small" id="refresh" title="Обновить данные">⟳ Обновить</button></div></header>${body}</main></div>`, { noTabs: true });
+    ui.$('#out').onclick = async () => { cache = null; await C.signOut(); ui.dispatch(); };
+    ui.$('#refresh').onclick = () => { cache = null; ui.dispatch(); };
+  }
+  async function guard(path, title, render) {
     if (!C.enabled) return ui.set('<div class="card"><h1>Сервер недоступен</h1><p>Не загрузился скрипт Supabase. Обновите страницу.</p></div>', { noTabs: true });
     let ses = null; try { ses = await C.session(); } catch (e) {}
     if (!ses || !(await C.isTeacher())) return loginForm();
-    ui.set('<h1>Кабинет преподавателя</h1><p class="muted">Загружаю…</p>', { noTabs: true });
-    let students = [], invites = [];
-    try { [students, invites] = await Promise.all([C.students(), C.invites()]); } catch (x) { return ui.set(`<div class="card"><p>${esc(C.err(x))}</p><a class="btn" href="#/admin">Повторить</a></div>`, { noTabs: true }); }
-    const rows = students.map(s => {
-      const m = s.state && s.state.units ? JP.studentSummary(s.state) : { onboarded: false };
-      const quiet = daysSince(s.last_seen) >= 3;
-      return `<a class="card" href="#/admin/s/${s.id}" style="display:block;text-decoration:none;color:inherit"><div class="row between"><span><b style="font-size:1.1rem">${esc(s.name)}</b>${s.login ? ` <small class="muted">@${esc(s.login)}</small>` : ' <small class="muted">без пароля</small>'}</span>${quiet ? '<span class="chip warm">⚠ нет активности</span>' : ''}</div>
-        ${m.onboarded ? `<div style="margin:8px 0">${ui.bar(m.progress)}</div><div class="row between"><small class="muted">${Math.round(m.progress * 100)}% · этап ${m.stage} (${m.level})</small><small class="muted">🔥 ${m.streak}</small></div>
-        <small class="muted">неделя: ${m.weekMin} из ${m.goalMin} мин · точность ${m.acc == null ? '—' : Math.round(m.acc * 100) + '%'} · слов ${m.words}</small><br>` : '<p class="muted" style="margin:6px 0">Знакомство ещё не пройдено</p>'}
-        <small class="muted">последний вход: ${ago(s.last_seen)}</small></a>`;
-    }).join('') || '<div class="card muted">Пока нет учеников. Создайте код и отправьте ученику.</div>';
-    const inv = invites.map(i => `<div class="list-item"><span class="grow"><b style="letter-spacing:.08em">${esc(i.code)}</b><br><small class="muted">${esc(i.label || 'без подписи')}${i.student_id ? ' · восстановление' : ''} · ${ago(i.created_at)}</small></span><button class="btn small" data-copy="${esc(i.code)}">Код</button><button class="btn small" data-invite="${esc(i.code)}" data-lab="${esc(i.label || '')}">Приглашение</button><button class="icon-btn" data-del="${esc(i.code)}" aria-label="Удалить код">🗑</button></div>`).join('');
-    ui.set(`<div class="row between"><h1 style="margin:0">Кабинет преподавателя</h1><button class="btn small ghost" id="out">Выйти</button></div>
-      <div class="card warm"><div class="muted" style="font-size:.85rem">Ссылка на платформу для учеников</div><div style="font-weight:700;word-break:break-all;margin:4px 0 8px">${esc(siteUrl())}</div><div class="row"><button class="btn small" id="cplink">Копировать ссылку</button><button class="btn small ghost" id="shlink">Поделиться</button></div>
-        <p class="muted" style="font-size:.85rem;margin:8px 0 0">Ученик открывает ссылку, нажимает «Регистрация по коду», вводит код, имя и придумывает логин и пароль. Или отправьте приглашение с кодом: оно уже содержит ссылку.</p></div>
-      <p class="muted">Учеников: ${students.length}. Прогресс обновляется автоматически, когда ученик занимается.</p>
-      <div class="card soft"><h3 style="margin-top:0">Новый код для ученика</h3><div class="row"><input type="text" id="lab" placeholder="Подпись (необязательно)" class="grow" maxlength="60"><button class="btn primary" id="mk">Создать код</button></div>
-        <div class="row" style="margin-top:10px"><span class="muted">Или сразу пачку:</span><input type="number" id="cnt" value="10" min="2" max="50" style="width:90px"><button class="btn" id="mkn">Создать</button></div>
-        <div id="newcode"></div></div>
-      ${invites.length ? `<div class="card"><div class="row between"><h3 style="margin:0">Запас кодов: ${invites.length}</h3><div class="row"><button class="btn small" id="cpall">Копировать все</button><button class="btn small" id="dlall">Скачать .csv</button></div></div>${inv}</div>` : ''}
-      <h2>Ученики</h2>${rows}<a class="btn block" href="#/teacher" style="margin:8px 0 24px">Открыть отчёт из файла</a>`, { noTabs: true });
-    ui.$('#out').onclick = async () => { await C.signOut(); ui.dispatch(); };
-    ui.$('#mk').onclick = async () => { try { const code = await C.createInvite(ui.$('#lab').value.trim()); ui.dispatch(); setTimeout(() => showCode(code, ui.$('#lab') && ui.$('#lab').value), 50); } catch (x) { U.toast(C.err(x)); } };
-    ui.$('#mkn').onclick = async () => {
-      const n = Math.max(2, Math.min(50, parseInt(ui.$('#cnt').value, 10) || 10)), lab = ui.$('#lab').value.trim(); const btn = ui.$('#mkn'); btn.disabled = true; btn.textContent = 'Создаю…';
-      try { for (let i = 1; i <= n; i++) await C.createInvite(lab ? lab + ' ' + i : ''); U.toast('Создано кодов: ' + n); ui.dispatch(); } catch (x) { U.toast(C.err(x)); btn.disabled = false; btn.textContent = 'Создать'; }
-    };
-    const cpall = ui.$('#cpall'); if (cpall) cpall.onclick = () => copy(invites.map(i => i.code + (i.label ? '  ' + i.label : '')).join('\n'));
-    const dlall = ui.$('#dlall'); if (dlall) dlall.onclick = () => ui.download('b1-codes-' + U.today() + '.csv', 'code,label,created\n' + invites.map(i => [i.code, '"' + (i.label || '').replace(/"/g, '""') + '"', i.created_at.slice(0, 10)].join(',')).join('\n'), 'text/csv');
+    if (!cache) ui.set('<div class="adm"><main class="adm-main"><p class="muted">Загружаю данные…</p></main></div>', { noTabs: true });
+    let d; try { d = await load(); } catch (x) { return ui.set(`<div class="card"><p>${esc(C.err(x))}</p><a class="btn" href="#/admin">Повторить</a></div>`, { noTabs: true }); }
+    render(d, (body, o) => shell(path, title, body, o));
+  }
+  const freeCodes = d => d.invites.filter(i => !i.used_at);
+  const isReset = i => !!i.student_id && !i.used_at;
+
+  // ---------- Обзор ----------
+  ui.route('/admin', () => guard('/admin', 'Обзор', (d, out) => {
+    const st = d.students, on = st.filter(x => x.sum.onboarded);
+    const active7 = st.filter(x => daysSince(x.last_seen) < 7).length;
+    const avgProg = on.length ? on.reduce((a, x) => a + x.sum.progress, 0) / on.length : 0;
+    const free = freeCodes(d).filter(i => !i.student_id).length;
+    const weekMin = on.reduce((a, x) => a + x.sum.weekMin, 0);
+    const attn = [];
+    st.forEach(x => {
+      const why = [];
+      if (!x.sum.onboarded) { if (daysSince(x.created_at) >= 1) why.push('не прошёл знакомство'); }
+      else {
+        if (daysSince(x.last_seen) >= 3) why.push('нет активности ' + daysSince(x.last_seen) + ' дн.');
+        if (x.sum.acc != null && x.sum.acc < 0.6) why.push('низкая точность ' + Math.round(x.sum.acc * 100) + '%');
+        if (x.sum.weak >= 3) why.push('слабых тем: ' + x.sum.weak);
+      }
+      if (why.length) attn.push({ x, why });
+    });
+    const recent = st.slice().sort((a, b) => String(b.last_seen || '').localeCompare(String(a.last_seen || ''))).slice(0, 6);
+    const top = on.slice().sort((a, b) => b.sum.progress - a.sum.progress).slice(0, 5);
+    out(`<div class="d-kpis">
+        <div class="d-card"><div class="d-lab">Ученики</div><div class="d-big">${st.length}</div><div class="d-foot">активны за 7 дней: <b>${active7}</b></div></div>
+        <div class="d-card"><div class="d-lab">Средний прогресс</div><div class="d-big">${Math.round(avgProg * 100)}<small>%</small></div><div class="d-bar"><i style="width:${Math.round(avgProg * 100)}%"></i></div><div class="d-foot">на пути к B1</div></div>
+        <div class="d-card"><div class="d-lab">Минут за неделю</div><div class="d-big">${weekMin}</div><div class="d-foot">у всех учеников вместе</div></div>
+        <div class="d-card"><div class="d-lab">Свободные коды</div><div class="d-big">${free}</div><div class="d-foot"><a href="#/admin/codes">управлять кодами →</a></div></div></div>
+      <div class="d-main">
+        <div class="d-card"><h2 class="d-h2">Требуют внимания</h2>${attn.length ? attn.map(a => `<a class="adm-row" href="#/admin/s/${a.x.id}"><span class="grow"><b>${esc(a.x.name)}</b><br><small class="muted">${esc(a.why.join(' · '))}</small></span><span class="muted">›</span></a>`).join('') : '<p class="muted">Всё спокойно: у всех есть активность, тревожных сигналов нет.</p>'}</div>
+        <div class="d-card"><h2 class="d-h2">Последняя активность</h2>${recent.length ? recent.map(x => `<a class="adm-row" href="#/admin/s/${x.id}"><span class="grow"><b>${esc(x.name)}</b><br><small class="muted">${ago(x.last_seen)}${x.sum.onboarded ? ' · ' + Math.round(x.sum.progress * 100) + '%' : ''}</small></span><span class="muted">›</span></a>`).join('') : '<p class="muted">Пока нет учеников. Создайте код в разделе «Коды».</p>'}</div></div>
+      <div class="d-main">
+        <div class="d-card"><h2 class="d-h2">Лидеры по прогрессу</h2>${top.length ? top.map((x, i) => `<div class="adm-row"><span style="width:22px">${i + 1}</span><span class="grow">${esc(x.name)}<div class="d-bar" style="margin-top:4px"><i style="width:${Math.round(x.sum.progress * 100)}%"></i></div></span><b>${Math.round(x.sum.progress * 100)}%</b></div>`).join('') : '<p class="muted">Данных пока нет.</p>'}</div>
+        <div class="d-card warm"><h2 class="d-h2">Пригласить ученика</h2><p class="muted">Ссылка на платформу:</p><div style="font-weight:700;word-break:break-all">${esc(siteUrl())}</div>
+          <div class="row" style="margin:10px 0"><button class="btn small" id="cplink">Копировать</button><button class="btn small ghost" id="shlink">Поделиться</button><a class="btn small primary" href="#/admin/codes">Создать код</a></div>
+          <p class="muted" style="font-size:.85rem;margin:0">Ученик открывает ссылку, вводит код, имя и придумывает логин и пароль.</p></div></div>`);
     ui.$('#cplink').onclick = () => copy(siteUrl()); ui.$('#shlink').onclick = () => share('Платформа для занятий английским: ' + siteUrl());
-    ui.$$('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
-    ui.$$('[data-invite]').forEach(b => b.onclick = () => share(inviteText(b.dataset.invite, '')));
-    ui.$$('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Удалить этот код?')) { try { await C.deleteInvite(b.dataset.del); ui.dispatch(); } catch (x) { U.toast(C.err(x)); } } });
-  });
-  const siteUrl = () => location.origin + '/';
-  const inviteText = (code, name) => `${name ? name + ', здравствуйте!' : 'Здравствуйте!'} Приглашаю на занятия английским с виртуальным ассистентом.\n1. Откройте ${siteUrl()}#/login?code=${String(code).replace(/-/g, '')}\n2. Впишите своё имя, придумайте логин и пароль.\nКод приглашения: ${code} (действует один раз).`;
-  function share(text) { if (navigator.share) navigator.share({ text }).catch(() => {}); else copy(text); }
-  function copy(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => U.toast(t.includes('\n') ? 'Скопировано кодов: ' + t.split('\n').length : 'Скопировано: ' + t), () => U.toast('Не удалось скопировать')); }
-  function showCode(code, label) {
+  }));
+
+  // ---------- Ученики ----------
+  const F = { q: '', sort: 'last', f: 'all' };
+  ui.route('/admin/students', () => guard('/admin/students', 'Ученики', (d, out) => {
+    out(`<div class="adm-tools"><input type="text" id="q" placeholder="Поиск по имени или логину" value="${esc(F.q)}" class="grow">
+        <select id="sort" aria-label="Сортировка"><option value="last">Сначала недавно заходившие</option><option value="prog">По прогрессу</option><option value="acc">По точности</option><option value="week">По минутам за неделю</option><option value="name">По имени</option></select></div>
+      <div class="choices" id="flt" style="margin-bottom:12px">${[['all', 'Все'], ['active', 'Активные'], ['quiet', 'Нет активности'], ['new', 'Не начали']].map(([k, l]) => `<button class="choice" data-f="${k}">${l}</button>`).join('')}</div>
+      <div id="list"></div>`);
+    ui.$('#sort').value = F.sort;
+    const draw = () => {
+      ui.$$('#flt .choice').forEach(b => b.classList.toggle('on', b.dataset.f === F.f));
+      let rows = d.students.filter(x => (x.name + ' ' + (x.login || '')).toLowerCase().includes(F.q.toLowerCase()));
+      if (F.f === 'active') rows = rows.filter(x => daysSince(x.last_seen) < 3 && x.sum.onboarded);
+      if (F.f === 'quiet') rows = rows.filter(x => daysSince(x.last_seen) >= 3);
+      if (F.f === 'new') rows = rows.filter(x => !x.sum.onboarded);
+      const key = { last: x => -new Date(x.last_seen || 0), prog: x => -(x.sum.progress || 0), acc: x => -(x.sum.acc == null ? -1 : x.sum.acc), week: x => -(x.sum.weekMin || 0), name: x => x.name.toLowerCase() }[F.sort];
+      rows.sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
+      ui.$('#list').innerHTML = rows.length ? `<div class="adm-table"><div class="adm-th"><span>Ученик</span><span>Прогресс</span><span>Этап</span><span>Неделя</span><span>Точность</span><span>Серия</span><span>Заходил</span></div>${rows.map(x => { const m = x.sum, quiet = daysSince(x.last_seen) >= 3;
+        return `<a class="adm-tr" href="#/admin/s/${x.id}"><span class="adm-name"><b>${esc(x.name)}</b>${x.login ? `<small class="muted">@${esc(x.login)}</small>` : '<small class="muted">без пароля</small>'}</span>
+          ${m.onboarded ? `<span data-l="Прогресс"><div class="d-bar"><i style="width:${Math.round(m.progress * 100)}%"></i></div><small>${Math.round(m.progress * 100)}%</small></span><span data-l="Этап">${m.stage} · ${m.level}</span><span data-l="Неделя">${m.weekMin} / ${m.goalMin}′</span><span data-l="Точность">${m.acc == null ? '—' : Math.round(m.acc * 100) + '%'}</span><span data-l="Серия">🔥 ${m.streak}</span>`
+            : '<span class="muted" style="grid-column:2 / 7">Знакомство ещё не пройдено</span>'}<span data-l="Заходил" class="${quiet ? 'down' : ''}">${ago(x.last_seen)}</span></a>`; }).join('')}</div>` : '<div class="d-card muted">Никого не нашли. Измените поиск или фильтр.</div>';
+    };
+    ui.$('#q').oninput = e => { F.q = e.target.value; draw(); }; ui.$('#sort').onchange = e => { F.sort = e.target.value; draw(); };
+    ui.$$('#flt .choice').forEach(b => b.onclick = () => { F.f = b.dataset.f; draw(); }); draw();
+  }));
+
+  // ---------- Карточка ученика ----------
+  ui.route('/admin/s/:id', ({ id }) => guard('/admin/students', 'Ученик', (d, out) => {
+    const st = d.students.find(s => s.id === id); if (!st) return ui.go('#/admin/students');
+    const has = st.state && st.state.units;
+    const dash = has ? JP.studentDashboard(st.state) : '<div class="d-card muted">Ученик ещё не начал занятия.</div>';
+    const rep = has ? JP.teacherReport(st.state) : '';
+    out(`<a href="#/admin/students" class="muted">← все ученики</a>
+      <div class="d-card" style="margin-top:8px"><div class="row between"><div><h2 class="d-h2" style="font-size:1.5rem">${esc(st.name)}</h2><div class="muted">${st.login ? 'Логин: <b>' + esc(st.login) + '</b>' : 'Пароль не задан'} · регистрация ${U.fmt(st.created_at.slice(0, 10))} · последний вход: ${ago(st.last_seen)}</div></div>
+        <div class="row"><button class="btn small" id="rec">🔑 Сброс пароля</button><button class="btn small" id="exp">⬇️ Данные</button><button class="btn small ghost" id="del" style="color:var(--bad)">Удалить</button></div></div><div id="newcode"></div></div>
+      <div class="adm-tabs"><button class="choice on" data-t="dash">Прогресс</button><button class="choice" data-t="rep">Отчёт для занятия</button></div>
+      <div id="t-dash">${dash}</div><div id="t-rep" hidden>${rep}</div>`);
+    ui.$$('.adm-tabs .choice').forEach(b => b.onclick = () => { ui.$$('.adm-tabs .choice').forEach(x => x.classList.toggle('on', x === b)); ui.$('#t-dash').hidden = b.dataset.t !== 'dash'; ui.$('#t-rep').hidden = b.dataset.t !== 'rep'; });
+    ui.$('#rec').onclick = async () => { try { const code = await C.createInvite('сброс пароля: ' + st.name, st.id); cache = null; showCode(code, st.name, 'Код сброса пароля'); U.toast('Код создан: ученик задаст новый пароль'); } catch (x) { U.toast(C.err(x)); } };
+    ui.$('#exp').onclick = () => ui.download(st.name.replace(/\W+/g, '_') + '-' + U.today() + '.json', JSON.stringify(st.state || {}, null, 1), 'application/json');
+    ui.$('#del').onclick = async () => { if (confirm('Удалить ученика «' + st.name + '» вместе со всем прогрессом? Это нельзя отменить.')) { try { await C.deleteStudent(st.id); cache = null; ui.go('#/admin/students'); } catch (x) { U.toast(C.err(x)); } } };
+  }));
+  function showCode(code, label, title) {
     const el = ui.$('#newcode'); if (!el) return;
-    el.innerHTML = `<div class="card" style="margin:12px 0 0;text-align:center"><div class="muted">Код создан (действует один раз)</div><div style="font-size:1.8rem;font-weight:800;letter-spacing:.12em;margin:6px 0">${esc(code)}</div><div class="row" style="justify-content:center"><button class="btn small" id="cc">Копировать код</button><button class="btn small primary" id="ci">Приглашение со ссылкой</button></div></div>`;
+    el.innerHTML = `<div class="card soft" style="margin:12px 0 0;text-align:center"><div class="muted">${esc(title || 'Код создан')} (действует один раз)</div><div style="font-size:1.8rem;font-weight:800;letter-spacing:.12em;margin:6px 0">${esc(code)}</div><div class="row" style="justify-content:center"><button class="btn small" id="cc">Копировать код</button><button class="btn small primary" id="ci">Приглашение со ссылкой</button></div></div>`;
     ui.$('#cc').onclick = () => copy(code); ui.$('#ci').onclick = () => share(inviteText(code, label || ''));
   }
 
-  ui.route('/admin/s/:id', async ({ id }) => {
-    let ses = null; try { ses = await C.session(); } catch (e) {}
-    if (!ses || !(await C.isTeacher())) return ui.go('#/admin');
-    ui.set('<p class="muted">Загружаю…</p>', { noTabs: true });
-    let st; try { st = (await C.students()).find(s => s.id === id); } catch (x) { return ui.set(`<div class="card">${esc(C.err(x))}</div>`, { noTabs: true }); }
-    if (!st) return ui.go('#/admin');
-    const rep = st.state && st.state.units ? JP.teacherReport(st.state) : '<div class="card muted">Занятия ещё не начаты.</div>';
-    ui.set(`<a href="#/admin" class="muted">← все ученики</a><h1>${esc(st.name)}</h1><p class="muted">${st.login ? 'Логин: <b>' + esc(st.login) + '</b> · ' : 'Пароль не задан · '}Последняя активность: ${ago(st.last_seen)}${st.state_updated ? ' · данные от ' + U.fmt(st.state_updated.slice(0, 10)) : ''}</p>
-      <div class="row" style="margin-bottom:12px"><button class="btn" id="rec">🔑 Сброс пароля (код)</button><button class="btn" id="exp">⬇️ Скачать данные</button><button class="btn ghost" id="del" style="color:var(--bad)">Удалить ученика</button></div><div id="newcode"></div>${rep}`, { noTabs: true });
-    ui.$('#rec').onclick = async () => { try { const code = await C.createInvite('сброс пароля: ' + st.name, st.id); showCode(code, st.name); U.toast('Код сброса создан: ученик задаст новый пароль'); } catch (x) { U.toast(C.err(x)); } };
-    ui.$('#exp').onclick = () => ui.download(st.name.replace(/\W+/g, '_') + '-' + U.today() + '.json', JSON.stringify(st.state || {}, null, 1), 'application/json');
-    ui.$('#del').onclick = async () => { if (confirm('Удалить ученика «' + st.name + '» вместе со всем прогрессом? Это нельзя отменить.')) { try { await C.deleteStudent(st.id); ui.go('#/admin'); } catch (x) { U.toast(C.err(x)); } } };
-  });
+  // ---------- Коды ----------
+  const CF = { f: 'free' };
+  ui.route('/admin/codes', () => guard('/admin/codes', 'Коды', (d, out) => {
+    const byId = Object.fromEntries(d.students.map(s => [s.id, s]));
+    const free = d.invites.filter(i => !i.used_at && !i.student_id), reset = d.invites.filter(isReset), used = d.invites.filter(i => i.used_at);
+    out(`<div class="d-main"><div class="d-card soft"><h2 class="d-h2">Создать код</h2>
+        <div class="row" style="margin-top:8px"><input type="text" id="lab" placeholder="Подпись (необязательно), например имя" class="grow" maxlength="60"><button class="btn primary" id="mk">Создать код</button></div>
+        <div class="row" style="margin-top:10px"><span class="muted">Или пачку:</span><input type="number" id="cnt" value="10" min="2" max="50" style="width:90px"><button class="btn" id="mkn">Создать</button></div><div id="newcode"></div></div>
+      <div class="d-card warm"><h2 class="d-h2">Ссылка для учеников</h2><div style="font-weight:700;word-break:break-all;margin:6px 0">${esc(siteUrl())}</div><div class="row"><button class="btn small" id="cplink">Копировать</button><button class="btn small ghost" id="shlink">Поделиться</button></div>
+        <p class="muted" style="font-size:.85rem;margin:8px 0 0">Каждый код работает один раз. «Приглашение» формирует готовый текст со ссылкой, в которую уже вписан код.</p></div></div>
+      <div class="choices" id="cflt" style="margin:4px 0 12px">${[['free', 'Свободные', free.length], ['reset', 'Сброс пароля', reset.length], ['used', 'Использованные', used.length]].map(([k, l, n]) => `<button class="choice" data-f="${k}">${l} · ${n}</button>`).join('')}</div>
+      <div class="d-card" id="clist"></div>`);
+    const draw = () => {
+      ui.$$('#cflt .choice').forEach(b => b.classList.toggle('on', b.dataset.f === CF.f));
+      const rows = CF.f === 'free' ? free : CF.f === 'reset' ? reset : used;
+      const bar = CF.f !== 'used' && rows.length ? `<div class="row between" style="margin-bottom:8px"><b>${rows.length} ${U.plural(rows.length, 'код', 'кода', 'кодов')}</b><div class="row"><button class="btn small" id="cpall">Копировать все</button><button class="btn small" id="dlall">Скачать .csv</button></div></div>` : '';
+      ui.$('#clist').innerHTML = bar + (rows.length ? rows.map(i => { const who = byId[i.student_id];
+        return `<div class="list-item"><span class="grow"><b style="letter-spacing:.08em">${esc(i.code)}</b><br><small class="muted">${esc(i.label || 'без подписи')} · создан ${ago(i.created_at)}${i.used_at ? ' · использован' + (who ? ': ' + esc(who.name) + (who.login ? ' (@' + esc(who.login) + ')' : '') : '') : ''}</small></span>
+          ${i.used_at ? '' : `<button class="btn small" data-copy="${esc(i.code)}">Код</button><button class="btn small" data-invite="${esc(i.code)}">Приглашение</button><button class="icon-btn" data-del="${esc(i.code)}" aria-label="Удалить код">🗑</button>`}</div>`; }).join('') : `<p class="muted">${CF.f === 'free' ? 'Свободных кодов нет. Создайте код или пачку выше.' : CF.f === 'reset' ? 'Кодов сброса пароля нет. Они создаются в карточке ученика.' : 'Использованных кодов пока нет.'}</p>`);
+      const cpall = ui.$('#cpall'); if (cpall) cpall.onclick = () => copy(rows.map(i => i.code + (i.label ? '  ' + i.label : '')).join('\n'));
+      const dlall = ui.$('#dlall'); if (dlall) dlall.onclick = () => ui.download('b1-codes-' + U.today() + '.csv', 'code,label,created\n' + rows.map(i => [i.code, '"' + (i.label || '').replace(/"/g, '""') + '"', i.created_at.slice(0, 10)].join(',')).join('\n'), 'text/csv');
+      ui.$$('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
+      ui.$$('[data-invite]').forEach(b => b.onclick = () => share(inviteText(b.dataset.invite, '')));
+      ui.$$('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Удалить этот код?')) { try { await C.deleteInvite(b.dataset.del); cache = null; ui.dispatch(); } catch (x) { U.toast(C.err(x)); } } });
+    };
+    ui.$$('#cflt .choice').forEach(b => b.onclick = () => { CF.f = b.dataset.f; draw(); }); draw();
+    ui.$('#cplink').onclick = () => copy(siteUrl()); ui.$('#shlink').onclick = () => share('Платформа для занятий английским: ' + siteUrl());
+    ui.$('#mk').onclick = async () => { const lab = ui.$('#lab').value.trim(); try { const code = await C.createInvite(lab); cache = null; CF.f = 'free'; ui.dispatch(); setTimeout(() => showCode(code, lab), 80); } catch (x) { U.toast(C.err(x)); } };
+    ui.$('#mkn').onclick = async () => {
+      const n = Math.max(2, Math.min(50, parseInt(ui.$('#cnt').value, 10) || 10)), lab = ui.$('#lab').value.trim(); const btn = ui.$('#mkn'); btn.disabled = true; btn.textContent = 'Создаю…';
+      try { for (let i = 1; i <= n; i++) await C.createInvite(lab ? lab + ' ' + i : ''); U.toast('Создано кодов: ' + n); cache = null; CF.f = 'free'; ui.dispatch(); } catch (x) { U.toast(C.err(x)); btn.disabled = false; btn.textContent = 'Создать'; }
+    };
+  }));
 })(window.JP);

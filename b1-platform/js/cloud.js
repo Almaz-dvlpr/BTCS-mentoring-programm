@@ -69,6 +69,7 @@
   C.signUp = async (email, password) => { const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/#/admin' } }); if (error) throw error; return data; };
   C.signOut = () => sb.auth.signOut();
   C.students = async () => { const { data, error } = await sb.from('b1_students').select('id,name,login,created_at,last_seen,state,state_updated').order('last_seen', { ascending: false }); if (error) throw error; return data; };
+  C.invitesAll = async () => { const { data, error } = await sb.from('b1_invites').select('code,label,student_id,created_at,used_at').order('created_at', { ascending: false }); if (error) throw error; return data; };
   C.invites = async () => { const { data, error } = await sb.from('b1_invites').select('code,label,student_id,created_at,used_at').is('used_at', null).order('created_at', { ascending: false }); if (error) throw error; return data; };
   C.createInvite = async (label, studentId) => { const { data, error } = await sb.rpc('b1_create_invite', { p_label: label || null, p_student_id: studentId || null }); if (error) throw error; return data; };
   C.deleteInvite = async code => { const { error } = await sb.from('b1_invites').delete().eq('code', code); if (error) throw error; };

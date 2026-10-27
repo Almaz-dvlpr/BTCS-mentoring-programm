@@ -15,7 +15,7 @@ window.supabase = { createClient() { return {
       let s = inv.student_id && db.students.find(x => x.id === inv.student_id);
       if (db.students.some(x => x.login === lg && x !== s)) return { error: { message: 'login_taken' } };
       if (s) { s.login = lg; s.password = a.p_password; Object.keys(db.sessions).forEach(t => { if (db.sessions[t] === s.id) delete db.sessions[t]; }); }
-      else { if (!a.p_name) return { error: { message: 'name_required' } }; s = { id: 's' + (db.students.length + 1), name: a.p_name, login: lg, password: a.p_password, state: null, last_seen: new Date().toISOString() }; db.students.push(s); inv.student_id = s.id; }
+      else { if (!a.p_name) return { error: { message: 'name_required' } }; s = { id: 's' + (db.students.length + 1), name: a.p_name, login: lg, password: a.p_password, state: null, created_at: new Date().toISOString(), last_seen: new Date().toISOString() }; db.students.push(s); inv.student_id = s.id; }
       inv.used_at = 'x'; return done({ data: { token: sess(db, s.id), name: s.name, login: s.login, state: s.state } }); }
     if (fn === 'b1_login') { const s = db.students.find(x => x.login === String(a.p_login).trim().toLowerCase()); if (!s || s.password !== a.p_password) return { error: { message: 'bad_credentials' } }; return done({ data: { token: sess(db, s.id), name: s.name, login: s.login, state: s.state } }); }
     if (fn === 'b1_logout') { delete db.sessions[a.p_token]; return done({ data: null }); }
@@ -25,9 +25,9 @@ window.supabase = { createClient() { return {
     if (fn === 'b1_is_teacher') return { data: !!db.session };
     if (fn === 'b1_create_invite') { const c = 'ZZZZZ-' + String(db.invites.length).padStart(5, 'A'); db.invites.push({ code: c, label: a.p_label, student_id: a.p_student_id, used_at: null, created_at: new Date().toISOString() }); return done({ data: c }); }
   },
-  from: t => { const q = { select() { return q; }, order() { return q; }, is() { return q; }, delete() { q._d = true; return q; }, eq(k, v) { q._eq = [k, v]; return q; },
+  from: t => { const q = { select() { return q; }, order() { return q; }, is() { q._is = true; return q; }, delete() { q._d = true; return q; }, eq(k, v) { q._eq = [k, v]; return q; },
     then(res) { const db = load(); if (q._d) { if (t === 'b1_students') db.students = db.students.filter(s => s.id !== q._eq[1]); else db.invites = db.invites.filter(i => i.code !== q._eq[1]); save(db); return res({ error: null }); }
-      return res({ data: t === 'b1_students' ? db.students.map(({ password, ...r }) => r) : db.invites.filter(i => !i.used_at), error: null }); } }; return q; },
+      return res({ data: t === 'b1_students' ? db.students.map(({ password, ...r }) => r) : (q._is ? db.invites.filter(i => !i.used_at) : db.invites), error: null }); } }; return q; },
   auth: { getSession: async () => ({ data: { session: load().session } }), signInWithPassword: async ({ email, password }) => { const db = load(); if (email === 'almirzhan@gmail.com' && password === 'secret123') { db.session = { user: { email } }; save(db); return { error: null }; } return { error: { message: 'Invalid login credentials' } }; }, signOut: async () => { const db = load(); db.session = null; save(db); }, signUp: async () => ({ data: {}, error: null }) } }; } };`;
 const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')));
 (async () => {
@@ -63,22 +63,31 @@ const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')))
   await p.goto(url + '#/admin'); await p.waitForSelector('#em');
   await p.fill('#em', 'almirzhan@gmail.com'); await p.fill('#pw', 'wrong'); await p.click('#in'); await p.waitForSelector('#msg:has-text("Неверный")');
   ok(true, 'неверный пароль преподавателя отклоняется');
-  await p.fill('#pw', 'secret123'); await p.click('#in'); await p.waitForSelector('text=Ученики');
-  ok(await p.locator('text=Мария').count() > 0 && await p.locator('text=@maria@mail.com').count() > 0, 'преподаватель видит ученика и его логин');
-  ok(await p.locator('#cplink').count() === 1 && await p.locator('#shlink').count() === 1, 'в кабинете есть ссылка на платформу, копирование и «Поделиться»');
-  await p.fill('#lab', 'Пачка'); await p.fill('#cnt', '5'); await p.click('#mkn'); await p.waitForSelector('text=Запас кодов');
+  await p.fill('#pw', 'secret123'); await p.click('#in'); await p.waitForSelector('.adm-side');
+  ok(await p.locator('.adm-side nav a').count() === 3 && await p.locator('text=Требуют внимания').count() === 1, 'после входа открывается обзор с разделами «Обзор / Ученики / Коды»');
+  ok(await p.locator('#cplink').count() === 1 && await p.locator('#shlink').count() === 1, 'в обзоре есть ссылка на платформу, копирование и «Поделиться»');
+  // ученики
+  await p.click('.adm-side nav a:has-text("Ученики")'); await p.waitForSelector('#list .adm-tr');
+  ok(await p.locator('#list .adm-tr:has-text("Мария")').count() === 1 && await p.locator('text=@maria@mail.com').count() > 0, 'раздел «Ученики»: ученик виден с логином');
+  await p.fill('#q', 'нет такого'); await p.waitForSelector('text=Никого не нашли'); ok(true, 'поиск по ученикам работает'); await p.fill('#q', '');
+  await p.click('#flt [data-f=new]'); ok(await p.locator('#list .adm-tr').count() === 0, 'фильтр «Не начали» скрывает начавшего ученика'); await p.click('#flt [data-f=all]');
+  // коды
+  await p.click('.adm-side nav a:has-text("Коды")'); await p.waitForSelector('#mkn');
+  await p.fill('#lab', 'Пачка'); await p.fill('#cnt', '5'); await p.click('#mkn'); await p.waitForSelector('#clist [data-invite]');
   ok((await DB(p)).invites.filter(i => /^Пачка/.test(i.label || '')).length === 5, 'создаётся пачка из 5 кодов');
-  ok(await p.locator('[data-invite]').count() >= 5 && await p.locator('#cpall').count() === 1 && await p.locator('#dlall').count() === 1, 'у кодов есть «Приглашение», «Копировать все», «Скачать .csv»');
+  ok(await p.locator('#clist [data-invite]').count() >= 5 && await p.locator('#cpall').count() === 1 && await p.locator('#dlall').count() === 1, 'у кодов есть «Приглашение», «Копировать все», «Скачать .csv»');
+  await p.click('#cflt [data-f=used]'); ok(await p.locator('#clist:has-text("использован: Мария")').count() === 1, 'во вкладке «Использованные» видно, кто воспользовался кодом');
+  await p.click('#cflt [data-f=free]');
   const inv = await p.evaluate(() => { let txt = ''; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: t => { txt = t; return Promise.resolve(); } }, configurable: true }); document.querySelector('[data-invite]').click(); return new Promise(r => setTimeout(() => r(txt), 100)); });
-  console.log('   приглашение:', JSON.stringify(inv).slice(0, 220));
   ok(/#\/login\?code=/.test(inv) && /Код приглашения/.test(inv), 'текст приглашения содержит ссылку с кодом');
-  // ссылка с кодом открывает регистрацию с подставленным кодом
   const codeRaw = (await DB(p)).invites.find(i => !i.used_at).code.replace('-', '');
   const p3 = await (await b.newContext({ reducedMotion: 'reduce' })).newPage(); await p3.route('**/supabase.js', r => r.fulfill({ contentType: 'application/javascript', body: FAKE })); await p3.goto(url + '#/login?code=' + codeRaw); await p3.waitForSelector('#code');
   ok((await p3.inputValue('#code')).replace('-', '').toUpperCase() === codeRaw, 'ссылка-приглашение подставляет код в форму регистрации'); await p3.close();
+  // карточка ученика
+  await p.click('.adm-side nav a:has-text("Ученики")'); await p.waitForSelector('#list .adm-tr'); await p.click('#list .adm-tr:has-text("Мария")'); await p.waitForSelector('#t-dash .dash');
+  ok(await p.locator('#t-dash:has-text("Минуты по неделям")').count() === 1 && await p.locator('#t-dash:has-text("Календарь занятий")').count() === 1, 'карточка ученика показывает полный дашборд прогресса');
+  await p.click('.adm-tabs [data-t=rep]'); ok(await p.locator('#t-rep:has-text("Что обсудить на следующем занятии")').count() === 1, 'вкладка «Отчёт для занятия» показывает рекомендации');
   // сброс пароля
-  await p.click('a.card:has-text("Мария")'); await p.waitForSelector('text=ОТЧЁТ ПО УЧЕНИЦЕ');
-  ok(await p.locator('text=Что обсудить на следующем занятии').count() === 1, 'карточка ученика показывает результаты');
   await p.click('#rec'); await p.waitForSelector('#ci');
   const rst = (await DB(p)).invites.find(i => i.student_id === 's1' && !i.used_at); ok(!!rst, 'создаётся код сброса пароля для ученика');
   await p.evaluate(() => { JP.cloud.logoutStudent(); }); // ученик «на другом устройстве» регистрируется кодом сброса

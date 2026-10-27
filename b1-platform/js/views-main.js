@@ -133,7 +133,7 @@
     const labels = ['Пн', '', 'Ср', '', 'Пт', '', 'Вс'].map(l => `<span>${l}</span>`).join('');
     return `<div class="d-card"><div class="row between"><div><h2 class="d-h2">Календарь занятий</h2><small class="muted">12 недель · дней с занятиями: ${n}</small></div><div class="d-legend" style="margin:0">Меньше <i class="hm l1"></i><i class="hm l2"></i><i class="hm l3"></i><i class="hm l4"></i> больше</div></div><div class="hm-wrap"><div class="hm-lab">${labels}</div><div class="hm-grid">${cols}</div></div></div>`;
   }
-  ui.route('/progress', () => {
+  function dashHtml(forTeacher) {
     const p = S().profile, prog = E.progress(), est = E.estimate(), wk = E.weekStats(), acc = E.avgAccuracy();
     const last14 = []; for (let i = 13; i >= 0; i--) last14.push((S().days[U.addDays(U.today(), -i)] || {}).minutes || 0);
     const prev7 = last14.slice(0, 7).reduce((a, b) => a + b, 0), cur7 = last14.slice(7).reduce((a, b) => a + b, 0);
@@ -148,7 +148,7 @@
     const stageRows = E.roadmap().map(st => { const d = st.items.filter(i => E.isDone(i.id)).length; return `<div class="d-stage"><span class="lvl ${d === 0 ? 'off' : ''}">${st.level}</span><div class="grow"><div class="row between"><b>${esc(st.title)}</b><small class="muted">${d} из ${st.items.length}</small></div><div class="d-bar"><i style="width:${Math.round(d / st.items.length * 100)}%"></i></div></div></div>`; }).join('');
     const weak = E.weakTopics().slice(0, 5);
     const doneCount = Object.values(S().units).filter(u => u.status === 'done').length;
-    ui.set(`<div class="dash">
+    return `<div class="dash">
       <div class="d-eyebrow">${U.parse(U.today()).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()} · ЭТАП ${E.currentStage()}</div>
       <h1 class="d-title">Прогресс, ${esc(p.name)}</h1>
       <p class="muted">Пройдено ${doneCount} ${U.plural(doneCount, 'тема', 'темы', 'тем')}, изучено ${learned} ${U.plural(learned, 'слово', 'слова', 'слов')}. До B1 осталось ≈ ${Math.round(est.remaining / 60)} ч, прогноз — ${U.fmtLong(est.eta)}</p>
@@ -169,11 +169,12 @@
       <div style="margin:12px 0">${heatmap()}</div>
       <div class="d-main">
         <div class="d-card"><h2 class="d-h2">Этапы маршрута</h2><div style="margin-top:8px">${stageRows}</div></div>
-        <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span><a class="btn small ghost" href="#/unit/${w.id}">Открыть</a></div>`).join('') : '<p class="muted">Слабых тем нет — так держать!</p>'}
+        <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span>${forTeacher ? '' : `<a class="btn small ghost" href="#/unit/${w.id}">Открыть</a>`}</div>`).join('') : '<p class="muted">Слабых тем нет.</p>'}
           ${S().checkpoints.length ? `<h3 style="margin-top:16px">Последние проверки</h3>${S().checkpoints.slice(-3).reverse().map(c => `<div class="d-row"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><span class="d-num">${Math.round(c.score * 100)}%</span></div>`).join('')}` : ''}</div>
       </div>
-      <a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a></div>`);
-  });
+      ${forTeacher ? '' : '<a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a>'}</div>`;
+  }
+  ui.route('/progress', () => ui.set(dashHtml(false)));
 
   // ---------- Ещё: настройки ----------
   ui.route('/more', () => {
@@ -246,13 +247,15 @@
     }
   // отчёт по произвольным данным ученика (из файла или из базы)
   JP.teacherReport = obj => { const restore = JP.store.swap(obj); E.invalidate(); try { return reportBlock(); } finally { restore(); E.invalidate(); } };
+  // полный дашборд ученика для кабинета преподавателя
+  JP.studentDashboard = obj => { const restore = JP.store.swap(obj); E.invalidate(); try { return dashHtml(true); } finally { restore(); E.invalidate(); } };
   JP.studentSummary = obj => {
     const restore = JP.store.swap(obj); E.invalidate();
     try {
       const p = S().profile; if (!p) return { onboarded: false };
       const wk = E.weekStats(), last = Object.keys(S().days).filter(d => (S().days[d].minutes || 0) > 0).sort().pop() || null;
       const st = E.currentStage();
-      return { onboarded: true, progress: E.progress(), stage: st, level: D.stages[st - 1].level, streak: E.streak(), weekMin: wk.minutes, goalMin: wk.goalMin, acc: E.avgAccuracy(), lastStudy: last, placed: !!(S().placement && S().placement.done), words: E.learnedWords() };
+      return { onboarded: true, progress: E.progress(), stage: st, level: D.stages[st - 1].level, streak: E.streak(), weekMin: wk.minutes, goalMin: wk.goalMin, acc: E.avgAccuracy(), weak: E.weakTopics().length, done: Object.values(S().units).filter(u => u.status === 'done').length, writings: S().writings.length, lastStudy: last, placed: !!(S().placement && S().placement.done), words: E.learnedWords() };
     } finally { restore(); E.invalidate(); }
   };
   ui.route('/teacher', () => {
