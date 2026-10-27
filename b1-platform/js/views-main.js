@@ -176,7 +176,7 @@
         <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span>${forTeacher ? '' : `<a class="btn small ghost" href="#/unit/${w.id}">Открыть</a>`}</div>`).join('') : '<p class="muted">Слабых тем нет.</p>'}
           ${S().checkpoints.length ? `<h3 style="margin-top:16px">Последние проверки</h3>${S().checkpoints.slice(-3).reverse().map(c => `<div class="d-row"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : c.type === 'irregular' ? 'Неправильные глаголы' : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><span class="d-num">${Math.round(c.score * 100)}%</span></div>`).join('')}` : ''}</div>
       </div>
-      ${forTeacher ? '' : '<a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a>'}</div>`;
+    </div>`;
   }
   ui.route('/progress', () => ui.set(dashHtml(false)));
 
@@ -210,13 +210,13 @@
           ${(authed || (legacy && S().seen.cloudLogin)) ? `<details class="card soft" id="chpw"><summary>Сменить пароль</summary>
             <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="${PW};margin-top:8px"><input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="${PW}"><input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="${PW}">
             <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button><p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></details>` : ''}
-          <div class="row"><button class="btn" id="logout">Выйти</button><a class="btn ghost" href="#/admin">Вход для преподавателя</a></div>
+          <div class="row"><button class="btn" id="logout">Выйти</button></div>
           <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по email и паролю.</p></div>`;
       })()}
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
         <div class="row"><button class="btn" id="exp">⬇️ Скачать прогресс</button><button class="btn" id="imp">⬆️ Загрузить</button><input type="file" id="file" accept=".json" hidden></div>
         <details style="margin-top:12px"><summary>Начать заново</summary><p class="muted">Удалит все ответы, прогресс и тексты на этом устройстве.</p><button class="btn" style="color:var(--bad)" id="reset">Удалить всё</button></details></div>
-      <a class="btn block" href="#/teacher" style="margin-bottom:24px">👩‍🏫 Кабинет преподавателя</a>`);
+      `);
     const on = id => new Set(ui.$$('#' + id + ' .choice.on').map(b => +b.dataset.d));
     ['sd', 'ld'].forEach(id => ui.$$('#' + id + ' .choice').forEach(b => b.onclick = () => { b.classList.toggle('on'); upd(); }));
     const upd = () => {
@@ -293,25 +293,6 @@
       return { onboarded: true, progress: E.progress(), stage: st, level: D.stages[st - 1].level, streak: E.streak(), weekMin: wk.minutes, goalMin: wk.goalMin, acc: E.avgAccuracy(), weak: E.weakTopics().length, done: Object.values(S().units).filter(u => u.status === 'done').length, writings: S().writings.length, lastStudy: last, placed: !!(S().placement && S().placement.done), words: E.learnedWords() };
     } finally { restore(); E.invalidate(); }
   };
-  ui.route('/teacher', () => {
-    const has = !!S().profile;
-    ui.set(`<a href="#/" class="muted">← на главную</a><h1>Кабинет преподавателя</h1>
-      <div class="card soft"><b>Как это работает.</b> Прогресс ученика хранится в его браузере. Чтобы увидеть его, она нажимает «Скачать прогресс» (раздел «Ещё»), отправляет вам файл, а вы загружаете его здесь. Ничего не уходит на сторонние серверы.</div>
-      <div class="card"><h3>Загрузить отчёт ученицы</h3><input type="file" id="f" accept=".json"><p class="muted" id="msg"></p></div>
-      <div id="rep">${has ? '<h2>Данные этого устройства</h2>' + reportBlock() : ''}</div>`);
-    ui.$('#f').onchange = e => {
-      const f = e.target.files[0]; if (!f) return;
-      const r = new FileReader(); r.onload = () => {
-        try {
-          const obj = JSON.parse(r.result); const restore = JP.store.swap(obj); E.invalidate();
-          let html; try { html = '<h2>Отчёт: ' + esc((obj.profile || {}).name || 'ученица') + '</h2>' + reportBlock(); } finally { restore(); E.invalidate(); }
-          ui.$('#rep').innerHTML = html; bindCopy(); ui.$('#msg').textContent = 'Файл загружен ✓';
-        } catch (x) { ui.$('#msg').textContent = 'Не удалось прочитать файл: ' + x.message; }
-      }; r.readAsText(f);
-    };
-    function bindCopy() { const b = ui.$('#copy'); if (b) b.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(ui.$('#txt').textContent).then(() => U.toast('Скопировано'), () => U.toast('Не удалось скопировать')); }; }
-    bindCopy();
-  });
   function suggestions() {
     const weak = E.weakTopics().slice(0, 3); const w = S().writings.length;
     const items = [];

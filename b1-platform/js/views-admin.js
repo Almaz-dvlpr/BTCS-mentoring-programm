@@ -39,8 +39,7 @@
               + pwField('pw', 'Пароль (не короче 8 символов)', 'new-password') + pwField('pw2', 'Повторите пароль', 'new-password')}
           <div id="msg" class="muted" role="alert" style="min-height:1.4em;color:var(--bad)"></div>
           <button class="btn primary block" id="go" type="submit">${mode === 'in' ? 'Войти' : mode === 'claim' ? 'Завершить регистрацию' : 'Зарегистрироваться'}</button>
-          ${mode === 'in' ? '<button class="btn ghost block" type="button" id="forgot" style="margin-top:8px">Забыли пароль?</button><p class="muted" style="margin-bottom:0;font-size:.85rem">Регистрировались раньше по логину? Введите логин вместо email.</p>' : mode === 'claim' ? '<button class="btn ghost block" type="button" id="exit" style="margin-top:8px">Выйти</button>' : '<p class="muted" style="margin-bottom:0;font-size:.85rem">Код действует один раз. Дальше вы входите по email и паролю с любого устройства.</p>'}</form>
-        <p class="center"><a href="#/admin">Вход для преподавателя</a></p>`, { noTabs: true });
+          ${mode === 'in' ? '<button class="btn ghost block" type="button" id="forgot" style="margin-top:8px">Забыли пароль?</button><p class="muted" style="margin-bottom:0;font-size:.85rem">Регистрировались раньше по логину? Введите логин вместо email.</p>' : mode === 'claim' ? '<button class="btn ghost block" type="button" id="exit" style="margin-top:8px">Выйти</button>' : '<p class="muted" style="margin-bottom:0;font-size:.85rem">Код действует один раз. Дальше вы входите по email и паролю с любого устройства.</p>'}</form>`, { noTabs: true });
       ui.$$('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; draw(); });
       if (!C.enabled) ui.$('#msg').textContent = 'Сервер недоступен. Обновите страницу.';
       const ex = ui.$('#exit'); if (ex) ex.onclick = async () => { await C.logoutStudent(); mode = 'in'; draw(); };
@@ -126,6 +125,7 @@
     ui.$('#refresh').onclick = () => { cache = null; ui.dispatch(); };
   }
   async function guard(path, title, render) {
+    if (!JP.preview && C.enabled && C.hasAccess()) return ui.go('#/'); // кабинет не для учеников
     if (!C.enabled) return ui.set('<div class="card"><h1>Сервер недоступен</h1><p>Не загрузился скрипт Supabase. Обновите страницу.</p></div>', { noTabs: true });
     let ses = null; try { ses = await C.session(); } catch (e) {}
     if (!ses || !(await C.isTeacher())) return loginForm();
@@ -209,6 +209,7 @@
       <div class="adm-tabs"><button class="choice on" data-t="dash">Прогресс</button><button class="choice" data-t="rep">Отчёт для занятия</button></div>
       <div id="t-dash">${dash}</div><div id="t-rep" hidden>${rep}</div>`);
     ui.$$('.adm-tabs .choice').forEach(b => b.onclick = () => { ui.$$('.adm-tabs .choice').forEach(x => x.classList.toggle('on', x === b)); ui.$('#t-dash').hidden = b.dataset.t !== 'dash'; ui.$('#t-rep').hidden = b.dataset.t !== 'rep'; });
+    const cb = ui.$('#copy'); if (cb) cb.onclick = () => copy(ui.$('#txt').textContent);
     ui.$('#asstu').onclick = () => openPreview('student', st);
     ui.$('#rec').onclick = async () => { try { const code = await C.createInvite('сброс доступа: ' + st.name, st.id); cache = null; showCode(code, st.name, 'Код сброса доступа'); U.toast('Код создан: ученик зарегистрируется заново, прогресс сохранится'); } catch (x) { U.toast(C.err(x)); } };
     ui.$('#exp').onclick = () => ui.download(st.name.replace(/\W+/g, '_') + '-' + U.today() + '.json', JSON.stringify(st.state || {}, null, 1), 'application/json');

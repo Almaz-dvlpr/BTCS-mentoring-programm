@@ -51,6 +51,7 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
 
   // ===== A. Регистрация по коду с подтверждением email =====
   await p.goto(url); await p.waitForSelector('#lg'); ok(p.url().endsWith('#/login'), 'без входа ученик попадает на экран входа');
+  ok(await p.locator('a[href^="#/admin"], a[href^="#/teacher"]').count() === 0 && !(await p.locator('body').innerText()).includes('преподавател'), 'на экране входа ученика нет ссылки на кабинет преподавателя');
   await p.click('[data-m=reg]'); await p.waitForSelector('#code');
   const fill = async o => { for (const [k, v] of Object.entries(o)) await p.fill('#' + k, v); };
   await fill({ code: 'WRONG-CODE1', nm: 'Мария', em: 'maria@mail.com', pw: 'password123', pw2: 'password123' }); await p.click('#go'); await p.waitForSelector('#msg:has-text("не найден")');
@@ -83,6 +84,10 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   p.once('dialog', d => d.accept()); await p.click('#logout'); await p.waitForSelector('#lg');
   await p.fill('#lg', 'maria@mail.com'); await p.fill('#pw', 'password123'); await p.click('#go'); await p.waitForSelector('#msg:has-text("Неверный")');
   await p.fill('#pw', 'brand-new-pass1'); await p.click('#go'); await p.waitForFunction(() => JP.store.get().profile); ok(true, 'после смены старый пароль не работает, новый работает');
+  for (const r of ['#/', '#/plan', '#/words', '#/progress', '#/more', '#/verbs']) { await p.goto(url + r); await p.waitForSelector('h1'); const bad = await p.evaluate(() => ({ links: document.querySelectorAll('a[href^="#/admin"], a[href^="#/teacher"]').length, text: /кабинет преподавателя|вход для преподавателя|отчёт для преподавателя/i.test(document.body.innerText) })); if (bad.links || bad.text) { ok(false, 'ученик видит ссылку на кабинет на экране ' + r); } }
+  ok(true, 'на экранах ученика нет ссылок и упоминаний кабинета преподавателя');
+  await p.goto(url + '#/admin'); await p.waitForTimeout(600); ok(/#\/$/.test(p.url()) && await p.locator('#em').count() === 0, 'вошедший ученик по адресу /#/admin попадает на главную, форма входа преподавателя ему не показывается');
+  await p.goto(url + '#/teacher'); await p.waitForTimeout(400); ok(await p.locator('text=Страница не найдена').count() === 1, 'старая страница /teacher больше не существует');
 
   // ===== C. Старый ученик (до email): привязка почты, прогресс сохраняется =====
   const p2 = await (await newCtx()).newPage(); p2.on('pageerror', e => errs.push('p2: ' + e.message)); p2.on('console', m => m.type() === 'error' && errs.push('p2: ' + m.text()));

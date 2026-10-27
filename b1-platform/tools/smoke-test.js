@@ -119,7 +119,7 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   ok(await page.locator('text=План на сегодня выполнен').count() > 0 || await page.locator('text=Всё сделано').count() > 0 || await page.locator('text=Эми аплодирует').count() > 0, 'ассистент поздравляет с выполненным планом');
 
   // экраны
-  for (const r of ['plan', 'words', 'progress', 'more', 'teacher']) {
+  for (const r of ['plan', 'words', 'progress', 'more']) {
     await page.goto(url + '#/' + r); await page.waitForSelector('h1');
     ok(await page.locator('h1').count() >= 1, 'экран /' + r + ' открывается');
   }
@@ -196,10 +196,6 @@ async function answerQuiz(page, getAnswer, wrongEvery) {
   // кабинет преподавателя читает файл
   const dump = await page2.evaluate(() => JP.store.exportJSON());
   require('fs').writeFileSync('/tmp/b1-export.json', dump);
-  await page.goto(url + '#/teacher'); await page.waitForSelector('#f');
-  await page.setInputFiles('#f', '/tmp/b1-export.json'); await page.waitForSelector('text=Отчёт: Анна');
-  ok(await page.locator('text=Письменные работы').count() === 1, 'кабинет преподавателя показывает загруженный отчёт');
-  ok(await page.evaluate(() => JP.store.get().profile.minutesPerDay === 30), 'после просмотра отчёта собственные данные не затёрты');
   await page2.screenshot({ path: '/tmp/shot-home.png' });
 
   ok(errors.length === 0, 'нет ошибок в консоли' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
