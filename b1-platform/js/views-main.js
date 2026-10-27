@@ -19,6 +19,9 @@
       <div class="row between"><div><small class="muted">${U.parse(U.today()).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</small><h1>Привет, ${esc(p.name)}!</h1></div>
         <span class="chip warm" title="Занятий подряд по расписанию">🔥 ${streak}</span></div>
       <div class="card"><div class="amy"><div class="avatar">🙂</div><div class="bubble" style="box-shadow:none;border:0;padding:0;background:transparent">${esc(A.homeMessage(day))}</div></div></div>
+      ${(() => { const C = JP.cloud; if (!(C && C.enabled && C.token() && !C.authed)) return ''; if ((S().seen.linkSnooze || '') > U.today()) return ''; const pend = C.pending && C.pending();
+        return `<div class="card warm" id="linkbanner"><div class="row between"><b>📧 ${pend && pend.legacyToken ? 'Завершите привязку email' : 'Привяжите email'}</b><button class="icon-btn" id="snooze" aria-label="Напомнить позже">✕</button></div>
+          <p class="muted" style="margin:6px 0 10px">${pend && pend.legacyToken ? 'Подтвердите почту по письму и завершите привязку.' : 'Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.'}</p><a class="btn primary small" href="#/more">${pend && pend.legacyToken ? 'Завершить' : 'Привязать email'}</a></div>`; })()}
       <div class="card"><div class="row between"><h2 style="margin:0">Сегодня</h2><small class="muted">${doneN} из ${day.tasks.length}</small></div>
         ${ui.bar(day.tasks.length ? doneN / day.tasks.length : 0)}
         <div style="margin-top:6px">${tasks || '<p class="muted">Задач нет. Можно взять дополнительный урок.</p>'}</div>
@@ -31,6 +34,7 @@
       <div class="card"><div class="row between"><h2 style="margin:0">Неделя</h2><small class="muted">${wk.minutes} / ${wk.goalMin} мин</small></div>
         <div style="margin:10px 0">${ui.bar(wk.goalMin ? wk.minutes / wk.goalMin : 0, 'accent')}</div>
         <div class="week">${[1, 2, 3, 4, 5, 6, 0].map((d, i) => { const date = U.addDays(U.mondayOf(U.today()), i); const did = E.didStudy(date); return `<div class="day-pill ${E.isStudyDay(date) ? 'study' : ''} ${(p.liveDays || []).includes(d) ? 'live' : ''}" ${date === U.today() ? 'style="outline:3px solid var(--accent)"' : ''}>${U.DAYS[d]}<br>${did ? '✓' : E.isStudyDay(date) ? '·' : '—'}</div>`; }).join('')}</div></div>`);
+    const sn = ui.$('#snooze'); if (sn) sn.onclick = () => { S().seen.linkSnooze = U.addDays(U.today(), 3); JP.store.save(); ui.$('#linkbanner').remove(); U.toast('Напомню через 3 дня'); };
     const m = ui.$('#more'); if (m) m.onclick = () => { const t = E.addExtraTask(); if (t) ui.go('#/do/' + t.id); else U.toast('Все доступные уроки пройдены — пройди итоговый тест'); };
     ui.$('#short').onclick = () => { E.buildDay(10, true); U.toast('Готово: план на сегодня — 10 минут'); ui.dispatch(); };
   });
