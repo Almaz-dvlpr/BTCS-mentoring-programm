@@ -11,7 +11,7 @@
     const next = open[0];
     const dueC = E.dueCards().length;
     const tasks = day.tasks.map(t => {
-      const ic = { unit: t.kind === 'vocab' ? '🔤' : t.kind === 'write' ? '✍️' : '📘', srs: '🃏', greview: '🔁', checkpoint: '📝', stagetest: '🏆', mix: '⚡' }[t.type] || '•';
+      const ic = { unit: t.kind === 'vocab' ? '🔤' : t.kind === 'irregular' ? '🧩' : t.kind === 'write' ? '✍️' : '📘', srs: '🃏', greview: '🔁', checkpoint: '📝', stagetest: '🏆', mix: '⚡' }[t.type] || '•';
       const inner = `<span class="dot">${t.done ? '✓' : ic}</span><span class="grow"><span class="tt">${esc(t.title)}</span><br><small class="muted">${esc(t.desc || '')} · ~${t.minutes} мин</small></span>${t.done ? '' : '<span class="muted">›</span>'}`;
       return t.done ? `<div class="task done">${inner}</div>` : `<a class="task" href="#/do/${t.id}">${inner}</a>`;
     }).join('');
@@ -45,7 +45,7 @@
       const rows = st.items.map(it => {
         const d = E.isDone(it.id), sk = d && S().units[it.id].status === 'skipped';
         const ic = d ? (sk ? '⏭' : '✓') : (locked ? '🔒' : (first && first.id === it.id ? '▶' : '○'));
-        const tag = it.kind === 'vocab' ? '<span class="chip warm">слова</span>' : it.kind === 'write' ? '<span class="chip warm">письмо</span>' : it.interactive ? '<span class="chip">интерактив</span>' : '<span class="chip gray">по книге</span>';
+        const tag = it.kind === 'vocab' ? '<span class="chip warm">слова</span>' : it.kind === 'irregular' ? '<span class="chip warm">глаголы</span>' : it.kind === 'write' ? '<span class="chip warm">письмо</span>' : it.interactive ? '<span class="chip">интерактив</span>' : '<span class="chip gray">по книге</span>';
         const sc = S().units[it.id] && S().units[it.id].score != null ? ` · ${Math.round(S().units[it.id].score * 100)}%` : '';
         const label = it.kind === 'grammar' ? `${it.book === 'eg' ? '' : 'M'}${it.n}. ${esc(it.title)}` : esc(it.title);
         return `<a class="list-item ${locked ? 'locked' : ''}" href="${locked ? 'javascript:void(0)' : '#/unit/' + it.id}" style="text-decoration:none;color:inherit"><span class="${d ? 'badge-done' : ''}" style="width:22px;text-align:center">${ic}</span><span class="grow">${label}<br><small class="muted">${sk ? 'пропущено по диагностике' : (d ? 'пройдено' + sc : '~' + it.minutes + ' мин')}</small></span>${tag}</a>`;
@@ -80,7 +80,7 @@
       <div class="card"><h3>Этапы</h3><div class="stages">${stageRows}</div></div>
       <div class="card"><h3>Минуты за 14 дней</h3>${chart}</div>
       ${weak.length ? `<div class="card"><h3>Что подтянуть</h3>${weak.slice(0, 8).map(w => `<div class="list-item"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span>${forTeacher ? '' : `<a class="btn small ghost" href="#/unit/${w.id}">Открыть</a>`}</div>`).join('')}</div>` : ''}
-      ${cps.length ? `<div class="card"><h3>Проверки</h3>${cps.map(c => `<div class="list-item"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><b>${Math.round(c.score * 100)}%</b></div>`).join('')}</div>` : ''}
+      ${cps.length ? `<div class="card"><h3>Проверки</h3>${cps.map(c => `<div class="list-item"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : c.type === 'irregular' ? 'Неправильные глаголы' : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><b>${Math.round(c.score * 100)}%</b></div>`).join('')}</div>` : ''}
       ${S().writings.length ? `<div class="card"><h3>Письменные работы (${S().writings.length})</h3>${S().writings.slice().reverse().slice(0, forTeacher ? 20 : 3).map(w => `<details><summary>${esc(w.title)} · ${U.fmt(w.date)}</summary>${forTeacher ? `<p class="muted">${esc(w.prompt)}</p>` : ''}<p style="white-space:pre-wrap">${esc(w.text)}</p></details>`).join('')}</div>` : ''}`;
   }
   // ---------- Дашборд ----------
@@ -170,7 +170,7 @@
       <div class="d-main">
         <div class="d-card"><h2 class="d-h2">Этапы маршрута</h2><div style="margin-top:8px">${stageRows}</div></div>
         <div class="d-card"><h2 class="d-h2">Что подтянуть</h2>${weak.length ? weak.map(w => `<div class="d-row"><span class="grow">${esc(w.title)}<br><small class="muted">${w.score != null ? 'результат ' + Math.round(w.score * 100) + '%' : 'ошибка в диагностике'}</small></span>${forTeacher ? '' : `<a class="btn small ghost" href="#/unit/${w.id}">Открыть</a>`}</div>`).join('') : '<p class="muted">Слабых тем нет.</p>'}
-          ${S().checkpoints.length ? `<h3 style="margin-top:16px">Последние проверки</h3>${S().checkpoints.slice(-3).reverse().map(c => `<div class="d-row"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><span class="d-num">${Math.round(c.score * 100)}%</span></div>`).join('')}` : ''}</div>
+          ${S().checkpoints.length ? `<h3 style="margin-top:16px">Последние проверки</h3>${S().checkpoints.slice(-3).reverse().map(c => `<div class="d-row"><span class="grow">${c.type === 'stagetest' ? 'Тест этапа ' + c.stage : c.type === 'irregular' ? 'Неправильные глаголы' : 'Недельная проверка'}<br><small class="muted">${U.fmt(c.date)}</small></span><span class="d-num">${Math.round(c.score * 100)}%</span></div>`).join('')}` : ''}</div>
       </div>
       ${forTeacher ? '' : '<a class="btn block" href="#/teacher" style="margin:8px 0 24px">👩‍🏫 Отчёт для преподавателя</a>'}</div>`;
   }

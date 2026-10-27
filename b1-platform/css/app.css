@@ -240,3 +240,10 @@ pre.report { white-space: pre-wrap; background: var(--card); border: 1px solid v
   .adm-tr .adm-name { grid-column: auto; flex-direction: column; gap: 0; } .adm-tr > span[data-l]::before { display: none; }
   .adm-tr:hover { border-color: #d9a441; }
 }
+
+/* неправильные глаголы */
+.irr-head, .irr-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 40px; gap: 8px; align-items: center; }
+.irr-head { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; padding: 0 0 6px; border-bottom: 1px solid var(--line); }
+.irr-head span:nth-child(n+4) { display: none; }
+.irr-row { padding: 9px 0; border-top: 1px solid var(--line); } .irr-row:first-of-type { border-top: 0; }
+.irr-b { display: flex; flex-direction: column; line-height: 1.25; }

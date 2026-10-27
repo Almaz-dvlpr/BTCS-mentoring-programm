@@ -28,7 +28,7 @@
       if (q.t === 'gap') {
         body = `<div class="qtext">${q.q.replace('___', blank)}</div><input class="qinput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="впиши ответ">`;
       } else if (q.t === 'vtype') {
-        body = `<div class="qtext big">${U.esc(q.q)}</div><div class="qsub">Напиши это слово по-английски</div><input class="qinput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="по-английски">`;
+        body = `<div class="qtext big">${U.esc(q.q)}</div><div class="qsub">${U.esc(q.sub || 'Напиши это слово по-английски')}</div><input class="qinput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="по-английски">`;
       } else if (q.t === 'listen') {
         body = `<div class="qtext"><button class="btn big-play" data-act="play">🔊 Послушать</button> <button class="btn ghost small" data-act="slow">🐢 Медленно</button></div>
           <input class="qinput" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="напиши, что услышала">`;

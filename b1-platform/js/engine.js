@@ -2,8 +2,9 @@
 (function (JP) {
   const U = JP.U, S = () => JP.store.get(), D = JP.data;
   const E = {};
-  const MIN = { grammar: 30, vocab: 20, write: 20 };
-  const PM = { grammar: 20, vocab: 12, write: 20 }; // минуты именно на платформе (остальное — работа с книгой)
+  const MIN = { grammar: 30, vocab: 20, write: 20, irregular: 15 };
+  const IRR_STAGES = { 1: [1, 2, 3], 2: [4, 5, 6, 7, 8], 3: [9, 10, 11, 12], 4: [13, 14] };
+  const PM = { grammar: 20, vocab: 12, write: 20, irregular: 12 }; // минуты именно на платформе (остальное — работа с книгой)
   const GRAMMAR_INTERVALS = [1, 3, 7, 14, 30];
   const CARD_INTERVALS = [0, 1, 3, 7, 16, 35]; // по коробкам 1..5 (0 — сегодня)
 
@@ -40,6 +41,9 @@
       } else {
         g = D.muList.map(([n, title]) => ({ id: 'mu-' + n, kind: 'grammar', book: 'mu', n, title, minutes: MIN.grammar, pm: PM.grammar }));
       }
+      // наборы неправильных глаголов равномерно вплетаются в этап
+      const irr = (IRR_STAGES[st.n] || []).map(n => ({ id: 'irr-' + n, kind: 'irregular', n, title: 'Неправильные глаголы: набор ' + n + ' (' + D.irregular.filter(x => x.set === n).slice(0, 3).map(x => x.b).join(', ') + '…)', minutes: MIN.irregular, pm: PM.irregular }));
+      if (irr.length) { const merged = v.slice(); irr.forEach((it, k) => merged.splice(Math.min(merged.length, Math.round((k + 1) * (merged.length + irr.length) / (irr.length + 1))), 0, it)); v = merged; }
       const w = D.writing.filter(x => x.stage === st.n).map(x => ({ id: x.id, kind: 'write', title: x.title, minutes: MIN.write, pm: PM.write }));
       g.forEach(it => { it.interactive = !!D.lessons[it.id]; });
       interleave(g, v, w).forEach(it => { it.stage = st.n; items.push(it); });
@@ -119,8 +123,20 @@
     c.seen++; if (ok) { c.ok++; c.box = Math.min(c.box + 1, 5); } else c.box = 1;
     c.due = U.addDays(U.today(), CARD_INTERVALS[c.box]); JP.store.save();
   };
-  E.knownWords = () => Object.values(S().cards).filter(c => c.box >= 3).length;
-  E.learnedWords = () => Object.keys(S().cards).length;
+  const isIrr = id => id.startsWith('irr:');
+  E.knownWords = () => Object.entries(S().cards).filter(([id, c]) => !isIrr(id) && c.box >= 3).length;
+  E.learnedWords = () => Object.keys(S().cards).filter(id => !isIrr(id)).length;
+  // неправильные глаголы: две карточки на глагол (2-я и 3-я форма)
+  E.irrCardIds = b => ['irr:' + b + ':p', 'irr:' + b + ':pp'];
+  E.addIrrCards = setNo => {
+    D.irregular.filter(v => v.set === setNo).forEach(v => E.irrCardIds(v.b).forEach(id => { if (!S().cards[id]) S().cards[id] = { box: 1, due: U.addDays(U.today(), 1), seen: 0, ok: 0 }; }));
+    S().vocabLearned['irr-' + setNo] = U.today(); JP.store.save();
+  };
+  E.irrStats = () => {
+    let learned = 0, known = 0;
+    D.irregular.forEach(v => { const c = E.irrCardIds(v.b).map(id => S().cards[id]); if (c[0] && c[1]) { learned++; if (c[0].box >= 3 && c[1].box >= 3) known++; } });
+    return { total: D.irregular.length, learned, known };
+  };
 
   // ---------- Оценка срока ----------
   E.weeklyMinutes = () => { const p = S().profile; return p ? p.daysPerWeek * p.minutesPerDay : 0; };
@@ -186,6 +202,7 @@
   function unitTask(it, m) {
     let desc;
     if (it.kind === 'vocab') desc = 'Новые слова';
+    else if (it.kind === 'irregular') desc = '10 неправильных глаголов';
     else if (it.kind === 'write') desc = 'Письменное задание';
     else if (!it.interactive) desc = BOOK[it.book] + ', урок ' + it.n + ' · по книге';
     else desc = BOOK[it.book] + ', урок ' + it.n + ' · ' + it.pm + ' мин на платформе' + (m > it.pm ? ' + ' + (m - it.pm) + ' по книге' : '');

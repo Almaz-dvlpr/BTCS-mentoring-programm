@@ -9,7 +9,7 @@
   function finishTask(ctx) {
     const mins = U.clamp(Math.round((Date.now() - ctx.t0) / 60000), 1, 45);
     const it = ctx.type === 'unit' ? E.item(ctx.ref) : null;
-    E.addMinutes(mins, it ? (it.kind === 'vocab' ? 'words' : it.kind === 'write' ? 'writing' : 'grammar') : ctx.type === 'srs' ? 'words' : 'review');
+    E.addMinutes(mins, it ? (it.kind === 'vocab' || it.kind === 'irregular' ? 'words' : it.kind === 'write' ? 'writing' : 'grammar') : ctx.type === 'srs' ? 'words' : 'review');
     if (ctx.task) { ctx.task.done = true; JP.store.save(); } else E.markTask(ctx.type, ctx.ref);
   }
   const nextCta = () => { const t = E.nextTask(); return t ? `<a class="btn primary block" href="#/do/${t.id}">Дальше: ${esc(t.title)}</a><a class="btn ghost block" style="margin-top:8px" href="#/">На главную</a>` : `<a class="btn primary block" href="#/">На главную</a>`; };
@@ -25,6 +25,7 @@
   };
   const bookName = it => it.book === 'eg' ? 'Essential Grammar in Use' : 'English Grammar in Use (Murphy)';
   const bookLine = it => {
+    if (it.kind === 'irregular') return '📖 Справочник: таблица неправильных глаголов в конце учебников (Irregular verbs)';
     if (it.kind === 'vocab') return `📖 В книге: <b>English Vocabulary in Use Elementary</b>, Unit ${it.n}`;
     let s = `📖 В книге: <b>${bookName(it)}</b>, ${it.book === 'eg' ? 'урок' : 'Unit'} ${it.n}`;
     if (it.book === 'eg' && MURPHY[it.n]) s += `<br>Углубиться: Murphy, Unit ${MURPHY[it.n]}`;
@@ -50,6 +51,7 @@
     if (it.stage > E.unlockedStage()) return ui.set(`<div class="card center"><div class="emoji-xl">🔒</div><h1>Этап ${it.stage} пока закрыт</h1><p>Он откроется после итогового теста предыдущего этапа.</p><a class="btn primary" href="#/plan">К плану</a></div>`);
     const ctx = ctxNew('unit', id, task);
     if (it.kind === 'vocab') return vocabUnit(it, ctx);
+    if (it.kind === 'irregular') return irregularUnit(it, ctx);
     if (it.kind === 'write') return writeUnit(it, ctx);
     if (D.lessons[id]) return grammarLesson(it, D.lessons[id], ctx);
     return bookOnly(it, ctx);
@@ -108,6 +110,84 @@
       resultScreen({ emoji: s >= .85 ? '✅' : '📚', title: 'Урок отмечен', msg: s >= .85 ? 'Отлично! Эта тема пройдена. Повторим её через несколько дней.' : 'Спасибо, что честно. Эта тема вернётся завтра, и мы вместе перечитаем правило. Если что-то совсем непонятно, запиши вопрос — разберёте с преподавателем.' });
     });
   }
+
+
+  // ---------- Неправильные глаголы ----------
+  const FORM = { p: ['Past Simple', '2-я форма'], pp: ['Past Participle', '3-я форма'] };
+  const irrByBase = () => { if (!E._irr) { E._irr = {}; D.irregular.forEach(v => { E._irr[v.b] = v; }); } return E._irr; };
+  const forms = str => str.split('/');
+  const sayForms = v => v.b + ', ' + forms(v.p)[0] + ', ' + forms(v.pp)[0];
+  // typed: вписать форму; mc: выбрать из четырёх
+  function irrQuestion(v, form, mode) {
+    const ans = v[form], id = 'irr:' + v.b + ':' + form;
+    if (mode === 'type') return { t: 'vtype', q: v.b + ' (' + v.ru + ')', sub: FORM[form][0] + ' — ' + FORM[form][1] + ': напиши форму', a: forms(ans), wid: id, say: forms(ans)[0], k: id };
+    const others = U.pick(D.irregular.filter(x => x.b !== v.b && x[form] !== ans && !forms(ans).includes(x[form])), 3).map(x => forms(x[form])[0]);
+    const right = forms(ans)[0], opts = U.shuffle([right].concat(others));
+    return { t: 'vmc', q: v.b + ' → ' + FORM[form][0] + '?', o: opts, a: opts.indexOf(right), wid: id, say: v.b, k: id };
+  }
+  function irregularUnit(it, ctx) {
+    const verbs = D.irregular.filter(v => v.set === it.n);
+    ui.set(`<a href="#/plan" class="muted">← к плану</a><div class="row between" style="margin-top:6px"><span class="chip warm">Неправильные глаголы</span><span class="chip gray">набор ${it.n} из ${D.irregularSets}</span></div><h1>Набор ${it.n}</h1>
+      <p class="muted">Учи три формы вместе, как ритм: <b>go – went – gone</b>. Нажми 🔊, чтобы услышать, и повтори вслух.</p>
+      <div class="card"><div class="irr-head"><span>Инфинитив</span><span>Past Simple</span><span>Past Participle</span></div>${verbs.map(v => `<div class="irr-row"><span class="irr-b"><b>${esc(v.b)}</b><small class="muted">${esc(v.ru)}</small></span><span>${esc(v.p)}</span><span>${esc(v.pp)}</span>${U.canSpeak() ? `<button class="icon-btn" data-say="${esc(sayForms(v))}" aria-label="Произнести">🔊</button>` : ''}</div>`).join('')}</div>
+      <div class="card soft"><b>Как запомнить:</b> прочитай набор вслух три раза, закрой таблицу и напиши формы по памяти. Дальше глаголы вернутся в «Словах» по системе интервалов.</div>
+      <button class="btn primary block" id="go" style="margin:16px 0 24px">Проверить себя</button>`);
+    ui.$$('[data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say, 0.8));
+    ui.$('#go').onclick = () => {
+      const qs = [];
+      U.shuffle(verbs).forEach(v => { const first = Math.random() < .5 ? 'p' : 'pp', second = first === 'p' ? 'pp' : 'p'; qs.push(irrQuestion(v, first, 'type'), irrQuestion(v, second, 'mc')); });
+      ui.set('<div id="qz"></div>');
+      JP.runQuiz(ui.$('#qz'), U.shuffle(qs), { label: 'Набор ' + it.n, onDone: res => {
+        const score = res.filter(r => r.ok).length / res.length;
+        E.addIrrCards(it.n);
+        res.forEach(r => { if (!r.ok && S().cards[r.wid]) { S().cards[r.wid].due = U.today(); S().cards[r.wid].box = 1; } });
+        E.completeUnit(it.id, score, { next: null }); finishTask(ctx);
+        const missed = [...new Set(res.filter(r => !r.ok).map(r => r.wid.split(':')[1]))].map(b => irrByBase()[b]).filter(Boolean);
+        resultScreen({ emoji: score >= .85 ? '🎉' : '👍', title: 'Набор ' + it.n + ' пройден', score, msg: A.praise(score) + ' Глаголы добавлены в повторение.',
+          html: missed.length ? `<div class="card"><h3>Повтори эти глаголы</h3>${missed.map(v => `<div class="word"><div><b>${esc(v.b)}</b> – ${esc(v.p)} – ${esc(v.pp)}</div></div>`).join('')}</div>` : '' });
+      } });
+    };
+  }
+  // карточка из повторений → вопрос
+  function irrCardQuestion(id, box) {
+    const [, b, form] = id.split(':'); const v = irrByBase()[b]; if (!v) return null;
+    return irrQuestion(v, form, box <= 1 ? 'mc' : 'type');
+  }
+
+  // справочник и проверка
+  ui.route('/verbs', () => {
+    const st = E.irrStats(); const learned = new Set(Object.keys(S().cards).filter(id => id.startsWith('irr:')).map(id => id.split(':')[1]));
+    ui.set(`<a href="#/words" class="muted">← слова</a><h1>Неправильные глаголы</h1>
+      <div class="grid3"><div class="card stat"><b>${st.total}</b><small>всего глаголов</small></div><div class="card stat"><b>${st.learned}</b><small>изучено</small></div><div class="card stat"><b>${st.known}</b><small>запомнено крепко</small></div></div>
+      <div class="card"><h3 style="margin-top:0">Проверка</h3><p class="muted">Впиши 2-ю и 3-ю форму. Результат попадёт в отчёт преподавателя.</p>
+        <div class="row"><button class="btn primary" id="exam">Экзамен: 15 глаголов</button><button class="btn" id="mine" ${st.learned ? '' : 'disabled'}>Только изученные</button><button class="btn ghost" id="mc">Быстрая тренировка</button></div></div>
+      <div class="card"><div class="row"><input type="text" id="q" placeholder="Найти глагол (go, идти…)" class="grow"><label class="check" style="margin:0"><input type="checkbox" id="onlyl"><span>только изученные</span></label></div><div id="list" style="margin-top:8px"></div></div>`);
+    const draw = () => {
+      const q = ui.$('#q').value.trim().toLowerCase(), only = ui.$('#onlyl').checked;
+      const rows = D.irregular.filter(v => (!q || v.b.includes(q) || v.ru.toLowerCase().includes(q) || v.p.includes(q) || v.pp.includes(q)) && (!only || learned.has(v.b)));
+      ui.$('#list').innerHTML = `<div class="irr-head"><span>Инфинитив</span><span>Past Simple</span><span>Past Participle</span></div>` + (rows.map(v => { const c = E.irrCardIds(v.b).map(id => S().cards[id]); const ok = c[0] && c[1] && c[0].box >= 3 && c[1].box >= 3;
+        return `<div class="irr-row"><span class="irr-b"><b>${esc(v.b)}</b><small class="muted">${esc(v.ru)}</small></span><span>${esc(v.p)}</span><span>${esc(v.pp)}</span><button class="icon-btn" data-say="${esc(sayForms(v))}" aria-label="Произнести">${ok ? '✅' : '🔊'}</button></div>`; }).join('') || '<p class="muted">Ничего не найдено.</p>');
+      ui.$$('#list [data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say, 0.8));
+    };
+    ui.$('#q').oninput = draw; ui.$('#onlyl').onchange = draw; draw();
+    const run = (pool, n, mode, label) => {
+      const vs = U.pick(pool, n); const qs = [];
+      vs.forEach(v => { if (mode === 'type') { qs.push(irrQuestion(v, 'p', 'type'), irrQuestion(v, 'pp', 'type')); } else qs.push(irrQuestion(v, Math.random() < .5 ? 'p' : 'pp', 'mc')); });
+      const t0 = Date.now(); ui.set('<div id="qz"></div>');
+      JP.runQuiz(ui.$('#qz'), mode === 'type' ? qs : U.shuffle(qs), { label, onDone: res => {
+        const score = res.filter(r => r.ok).length / res.length;
+        res.forEach(r => { if (S().cards[r.wid]) E.gradeCard(r.wid, r.ok); });
+        E.addMinutes(U.clamp(Math.round((Date.now() - t0) / 60000), 1, 30), 'review');
+        if (mode === 'type') { S().checkpoints.push({ date: U.today(), type: 'irregular', score, n: res.length }); JP.store.save(); }
+        const bad = [...new Set(res.filter(r => !r.ok).map(r => r.wid.split(':')[1]))].map(b => irrByBase()[b]).filter(Boolean);
+        resultScreen({ emoji: score >= .85 ? '🏆' : '📝', title: label + ': готово', score, msg: A.praise(score) + (bad.length ? ' Ошибки: ' + bad.slice(0, 6).map(v => v.b).join(', ') + '.' : ''),
+          html: bad.length ? `<div class="card"><h3>Разбор ошибок</h3>${bad.map(v => `<div class="irr-row"><span class="irr-b"><b>${esc(v.b)}</b><small class="muted">${esc(v.ru)}</small></span><span>${esc(v.p)}</span><span>${esc(v.pp)}</span></div>`).join('')}</div>` : '', cta: '<a class="btn primary block" href="#/verbs">К справочнику</a>' });
+      } });
+    };
+    ui.$('#exam').onclick = () => run(D.irregular, 15, 'type', 'Экзамен по глаголам');
+    ui.$('#mine').onclick = () => run(D.irregular.filter(v => learned.has(v.b)), Math.min(15, learned.size), 'type', 'Проверка изученных глаголов');
+    ui.$('#mc').onclick = () => run(D.irregular, 20, 'mc', 'Быстрая тренировка');
+  });
 
   // ---------- Слова: тема ----------
   function vocabUnit(it, ctx) {
@@ -174,6 +254,7 @@
       <div class="card">${due ? `<h3>Пора повторить ${due} ${U.plural(due, 'слово', 'слова', 'слов')}</h3><p class="muted">Это займёт около ${Math.max(2, Math.ceil(Math.min(due, 25) / 3))} минут. Повторяем в удачный момент — перед тем, как забыть.</p><button class="btn primary block" id="srs">Повторить сейчас</button>`
         : learned ? `<h3>На сегодня всё повторено 🎉</h3><p class="muted">${nextDue ? 'Следующее повторение — ' + U.fmt(nextDue) + '.' : ''}</p><button class="btn block" id="srs">Потренировать ещё 10 случайных слов</button>`
         : `<h3>Пока нет изученных слов</h3><p class="muted">Они появятся после первой темы со словами.</p>${next ? `<a class="btn primary block" href="#/unit/${next.id}">Открыть: ${esc(next.title)}</a>` : ''}`}</div>
+      <a class="card" href="#/verbs" style="display:block;text-decoration:none;color:inherit"><div class="row between"><div><h3 style="margin:0">🧩 Неправильные глаголы</h3><small class="muted">справочник из ${D.irregular.length} глаголов · изучено ${E.irrStats().learned} · проверка</small></div><span class="muted">›</span></div></a>
       ${doneUnits.length ? `<div class="card"><h3>Изученные темы</h3>${doneUnits.map(v => `<div class="list-item"><span class="badge-done">✓</span><div class="grow">${esc(v.title)}<br><small class="muted">${esc(v.ru)} · ${v.words.length} слов</small></div><a class="btn small ghost" href="#/vocab/${v.id}">Слова</a></div>`).join('')}</div>` : ''}
       <details class="card"><summary>Как работает система повторения</summary><p>Каждое слово лежит в одной из 5 «коробок». Правильный ответ — слово переходит в следующую коробку и вернётся позже (через 1, 3, 7, 16, 35 дней). Ошибка — слово возвращается в первую коробку. Так ты тратишь время на то, что действительно забывается.</p></details>`);
     const b = ui.$('#srs'); if (b) b.onclick = () => startSrs(null);
@@ -195,7 +276,8 @@
     }
     const pool = E.allWords();
     const qs = ids.map(id => {
-      const w = E.wordById(id), c = S().cards[id];
+      const c = S().cards[id]; if (id.startsWith('irr:')) return irrCardQuestion(id, c.box);
+      const w = E.wordById(id);
       if (c.box <= 1) return JP.vq.mc(w, pool, 'en2ru');
       if (c.box === 2 || !JP.vq.typable(w)) return JP.vq.mc(w, pool, 'ru2en');
       return JP.vq.type(w);
@@ -205,7 +287,7 @@
       res.forEach(r => E.gradeCard(r.wid, r.ok));
       const score = res.filter(r => r.ok).length / res.length;
       if (task) finishTask(ctx); else E.addMinutes(Math.max(1, Math.round(res.length / 4)), 'words');
-      const missed = [...new Set(res.filter(r => !r.ok).map(r => r.wid))].map(E.wordById);
+      const missed = [...new Set(res.filter(r => !r.ok).map(r => r.wid))].filter(id => !id.startsWith('irr:')).map(E.wordById);
       resultScreen({ emoji: score >= .85 ? '🧠' : '👍', title: 'Повторение завершено', score, msg: A.praise(score) + ' ' + (E.dueCards().length ? 'Ещё осталось ' + E.dueCards().length + ' карточек — можно повторить позже сегодня.' : 'Все карточки на сегодня повторены.'),
         html: missed.length ? `<div class="card"><h3>Повтори эти слова</h3><div class="words">${missed.map(w => `<div class="word"><div><b>${esc(w.en)}</b> — ${esc(w.ru)}</div><button class="icon-btn" data-say="${esc(w.en)}">🔊</button></div>`).join('')}</div></div>` : '' });
       ui.$$('[data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say));
