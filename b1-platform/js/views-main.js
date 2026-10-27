@@ -195,6 +195,12 @@
       <div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>${S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : ''}${JP.cloud && JP.cloud.token() ? '. Прогресс сохраняется на сервере автоматически' + (JP.cloud.status === 'ok' ? ' ✓' : JP.cloud.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : JP.cloud.status === 'revoked' ? ' — доступ отозван, войдите снова' : '') + '.' : ' (без входа: данные только на этом устройстве).'}</p>
         ${JP.cloud && JP.cloud.token() && !S().seen.cloudLogin ? `<div class="card soft" id="setpw"><b>Задайте логин и пароль</b><p class="muted" style="margin:4px 0 8px">Чтобы входить с любого устройства, не дожидаясь нового кода.</p>
           <input type="text" id="nl" placeholder="Логин" autocapitalize="off" style="margin-bottom:8px"><input type="password" id="np" placeholder="Пароль, не короче 8 символов" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px"><div id="pmsg" style="color:var(--bad);min-height:1.2em"></div><button class="btn primary" id="savepw">Сохранить</button></div>` : ''}
+        ${JP.cloud && JP.cloud.token() && S().seen.cloudLogin ? `<details class="card soft" id="chpw"><summary>Сменить пароль</summary>
+          <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin:8px 0">
+          <input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px">
+          <input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px">
+          <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button>
+          <p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></details>` : ''}
         <div class="row"><button class="btn" id="logout">Выйти</button><a class="btn ghost" href="#/admin">Вход для преподавателя</a></div>
         <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по логину и паролю.</p></div>
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
@@ -216,6 +222,17 @@
     };
     ui.$('#ics').onclick = () => ui.download('put-k-b1.ics', E.icsFor(), 'text/calendar');
     ui.$('#logout').onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, вход — по логину и паролю.')) return; if (JP.cloud && JP.cloud.token()) { await JP.cloud.flush(); await JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
+    const cp = ui.$('#savechpw'); if (cp) cp.onclick = async () => {
+      const m = ui.$('#cmsg'), v = id => ui.$('#' + id).value; m.style.color = 'var(--bad)';
+      if (!v('op')) { m.textContent = 'Введите текущий пароль.'; return; }
+      if (v('n1').length < 8) { m.textContent = 'Новый пароль должен быть не короче 8 символов.'; return; }
+      if (v('n1') !== v('n2')) { m.textContent = 'Новые пароли не совпадают.'; return; }
+      if (v('n1') === v('op')) { m.textContent = 'Новый пароль совпадает с текущим.'; return; }
+      cp.disabled = true; m.textContent = '';
+      try { await JP.cloud.changePassword(v('op'), v('n1')); ['op', 'n1', 'n2'].forEach(id => { ui.$('#' + id).value = ''; }); m.style.color = 'var(--ok)'; m.textContent = 'Пароль изменён ✓'; U.toast('Пароль изменён'); }
+      catch (x) { m.textContent = /bad_credentials/.test(x.message) ? 'Текущий пароль указан неверно.' : JP.cloud.err(x); }
+      cp.disabled = false;
+    };
     const sp = ui.$('#savepw'); if (sp) sp.onclick = async () => { const m = ui.$('#pmsg'); try { await JP.cloud.setCredentials(ui.$('#nl').value.trim(), ui.$('#np').value); U.toast('Логин и пароль сохранены'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); } };
     ui.$('#snd').onchange = e => { S().settings.sound = e.target.checked; JP.store.save(); };
     ui.$('#exp').onclick = () => ui.download('progress-' + U.today() + '.json', JP.store.exportJSON(), 'application/json');

@@ -17,7 +17,9 @@ window.supabase = { createClient() { return {
       if (s) { s.login = lg; s.password = a.p_password; Object.keys(db.sessions).forEach(t => { if (db.sessions[t] === s.id) delete db.sessions[t]; }); }
       else { if (!a.p_name) return { error: { message: 'name_required' } }; s = { id: 's' + (db.students.length + 1), name: a.p_name, login: lg, password: a.p_password, state: null, created_at: new Date().toISOString(), last_seen: new Date().toISOString() }; db.students.push(s); inv.student_id = s.id; }
       inv.used_at = 'x'; return done({ data: { token: sess(db, s.id), name: s.name, login: s.login, state: s.state } }); }
-    if (fn === 'b1_login') { const s = db.students.find(x => x.login === String(a.p_login).trim().toLowerCase()); if (!s || s.password !== a.p_password) return { error: { message: 'bad_credentials' } }; return done({ data: { token: sess(db, s.id), name: s.name, login: s.login, state: s.state } }); }
+    if (fn === 'b1_login') { const s = db.students.find(x => x.login === String(a.p_login).trim().toLowerCase()); if (!s || s.password !== a.p_password) return { data: { error: 'bad_credentials' } }; return done({ data: { token: sess(db, s.id), name: s.name, login: s.login, state: s.state } }); }
+    if (fn === 'b1_change_password') { const s = db.students.find(x => x.id === db.sessions[a.p_token]); if (!s) return { error: { message: 'bad_token' } }; if (s.password !== a.p_old) return { data: { error: 'bad_credentials' } };
+      if (a.p_new.length < 8) return { error: { message: 'weak_password' } }; s.password = a.p_new; Object.keys(db.sessions).forEach(t => { if (db.sessions[t] === s.id && t !== a.p_token) delete db.sessions[t]; }); return done({ data: { ok: true } }); }
     if (fn === 'b1_logout') { delete db.sessions[a.p_token]; return done({ data: null }); }
     if (fn === 'b1_set_credentials') { const s = db.students.find(x => x.id === db.sessions[a.p_token]); if (!s) return { error: { message: 'bad_token' } }; s.login = a.p_login.toLowerCase(); s.password = a.p_password; return done({ data: { login: s.login } }); }
     if (fn === 'b1_push') { const s = db.students.find(x => x.id === db.sessions[a.p_token]); if (!s) return { error: { message: 'bad_token' } }; s.state = a.p_state; s.state_updated = new Date().toISOString(); s.last_seen = s.state_updated; db.pushes++; return done({ data: null }); }
@@ -59,6 +61,20 @@ const DB = pg => pg.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')))
   ok(true, 'неверный пароль отклоняется');
   await p.fill('#pw', 'password123'); await p.click('#go'); await p.waitForFunction(() => JP.store.get().profile && JP.store.get().units['eg-1']);
   ok(true, 'вход по логину и паролю восстановил прогресс с сервера');
+  // смена пароля в кабинете ученика
+  await p.goto(url + '#/more'); await p.waitForSelector('#chpw'); await p.click('#chpw summary');
+  await p.fill('#op', 'bad-old-pass'); await p.fill('#n1', 'brand-new-pass1'); await p.fill('#n2', 'brand-new-pass1'); await p.click('#savechpw');
+  await p.waitForSelector('#cmsg:has-text("неверно")'); ok(true, 'смена пароля: неверный текущий пароль отклоняется');
+  await p.fill('#op', 'password123'); await p.fill('#n2', 'other-pass-123'); await p.click('#savechpw');
+  ok((await p.locator('#cmsg').textContent()).includes('не совпадают'), 'смена пароля: несовпадающие новые пароли отклоняются');
+  await p.fill('#n1', 'short'); await p.fill('#n2', 'short'); await p.click('#savechpw');
+  ok((await p.locator('#cmsg').textContent()).includes('не короче 8'), 'смена пароля: короткий пароль отклоняется');
+  await p.fill('#n1', 'brand-new-pass1'); await p.fill('#n2', 'brand-new-pass1'); await p.click('#savechpw'); await p.waitForSelector('#cmsg:has-text("изменён")');
+  ok((await DB(p)).students[0].password === 'brand-new-pass1', 'пароль изменён на сервере');
+  p.once('dialog', d => d.accept()); await p.click('#logout'); await p.waitForSelector('#lg');
+  await p.fill('#lg', 'maria@mail.com'); await p.fill('#pw', 'password123'); await p.click('#go'); await p.waitForSelector('#msg:has-text("Неверный")');
+  await p.fill('#pw', 'brand-new-pass1'); await p.click('#go'); await p.waitForFunction(() => JP.store.get().profile);
+  ok(true, 'после смены пароля старый не работает, новый — работает');
   // преподаватель
   await p.goto(url + '#/admin'); await p.waitForSelector('#em');
   await p.fill('#em', 'almirzhan@gmail.com'); await p.fill('#pw', 'wrong'); await p.click('#in'); await p.waitForSelector('#msg:has-text("Неверный")');

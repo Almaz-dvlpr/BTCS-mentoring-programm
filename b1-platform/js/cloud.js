@@ -27,11 +27,15 @@
   };
   C.login = async (login, password) => {
     const { data, error } = await sb.rpc('b1_login', { p_login: login, p_password: password });
-    if (error) throw error; return accept(data);
+    if (error) throw error; if (data && data.error) throw new Error(data.error); return accept(data);
   };
   C.setCredentials = async (login, password) => {
     const { data, error } = await sb.rpc('b1_set_credentials', { p_token: get(), p_login: login, p_password: password });
     if (error) throw error; JP.store.get().seen.cloudLogin = data.login; JP.store.save(); return data;
+  };
+  C.changePassword = async (oldPw, newPw) => {
+    const { data, error } = await sb.rpc('b1_change_password', { p_token: get(), p_old: oldPw, p_new: newPw });
+    if (error) throw error; if (data && data.error) throw new Error(data.error); return data;
   };
   C.me = async () => { const { data, error } = await sb.rpc('b1_me', { p_token: get() }); if (error) throw error; return data; };
   let timer = null, inflight = false, dirty = false;
