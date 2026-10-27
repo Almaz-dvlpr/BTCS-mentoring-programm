@@ -78,7 +78,7 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   ok((await DB(p)).outbox.some(m => m.kind === 'reset' && m.to === 'maria@mail.com'), '«Забыли пароль» отправляет письмо для восстановления');
   // смена пароля
   await p.fill('#pw', 'password123'); await p.click('#go'); await p.waitForFunction(() => JP.store.get().profile);
-  await p.goto(url + '#/more'); await p.waitForSelector('#chpw'); await p.click('#chpw summary');
+  await p.goto(url + '#/more'); await p.waitForSelector('#chpw'); ok(await p.locator('#chpw #op').isVisible(), 'форма смены пароля видна сразу, без раскрывающихся блоков');
   await p.fill('#op', 'bad-old-pass'); await p.fill('#n1', 'brand-new-pass1'); await p.fill('#n2', 'brand-new-pass1'); await p.click('#savechpw'); await p.waitForSelector('#cmsg:has-text("неверно")'); ok(true, 'смена пароля: неверный текущий пароль отклоняется');
   await p.fill('#op', 'password123'); await p.click('#savechpw'); await p.waitForSelector('#cmsg:has-text("изменён")'); ok((await DB(p)).users['maria@mail.com'].password === 'brand-new-pass1', 'пароль изменён');
   p.once('dialog', d => d.accept()); await p.click('#logout'); await p.waitForSelector('#lg');

@@ -184,18 +184,7 @@
   ui.route('/more', () => {
     const p = S().profile;
     const order = [1, 2, 3, 4, 5, 6, 0];
-    ui.set(`<h1>Настройки</h1>
-      <div class="card"><h3>Режим занятий</h3>
-        <label class="muted">Минут в день</label><select id="mins">${[15, 20, 30, 45, 60, 90].map(m => `<option value="${m}" ${m === p.minutesPerDay ? 'selected' : ''}>${m} минут</option>`).join('')}</select>
-        <p class="muted" style="margin-bottom:4px">Дни самостоятельных занятий</p><div class="choices" id="sd">${order.map(d => `<button class="choice day ${p.studyDays.includes(d) ? 'on' : ''}" data-d="${d}">${U.DAYS[d]}</button>`).join('')}</div>
-        <p class="muted" style="margin-bottom:4px">Дни занятий с преподавателем</p><div class="choices" id="ld">${order.map(d => `<button class="choice day ${(p.liveDays || []).includes(d) ? 'on' : ''}" data-d="${d}">${U.DAYS[d]}</button>`).join('')}</div>
-        <label class="muted" style="display:block;margin-top:12px">Удобное время</label><select id="bt">${[['morning', 'Утро'], ['day', 'День'], ['evening', 'Вечер'], ['late', 'Поздно вечером']].map(([k, l]) => `<option value="${k}" ${k === p.bestTime ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <label class="muted" style="display:block;margin-top:12px">Стиль общения Эми</label><select id="tone">${[['soft', 'Мягко'], ['firm', 'Чётко и по делу'], ['fun', 'С юмором']].map(([k, l]) => `<option value="${k}" ${k === p.tone ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <label class="muted" style="display:block;margin-top:12px">Срок достижения B1 (необязательно)</label><input type="date" id="dl" value="${p.deadline || ''}">
-        <div id="est" class="muted" style="margin:10px 0"></div>
-        <button class="btn primary block" id="save">Сохранить</button></div>
-      <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
-      <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
+    ui.set(`<h1>Профиль и настройки</h1>
       ${JP.preview ? '<div class="card warm"><h3>Аккаунт</h3><p class="muted" style="margin:0">Режим просмотра: вход и сервер отключены, все действия остаются только в этом окне.</p></div>' : (() => {
         const C = JP.cloud, authed = !!(C && C.authed), legacy = !!(C && C.token() && !authed), PW = 'width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px';
         const who = authed ? ' (' + esc(S().seen.cloudEmail || C.email || '') + ')' : S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : '';
@@ -207,12 +196,24 @@
             : `<div class="card soft" id="linkbox"><b>Привяжите email</b><p class="muted" style="margin:4px 0 8px">Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.</p>
               <input type="text" id="le" placeholder="Email" inputmode="email" autocapitalize="off" style="${PW}"><input type="password" id="lp" placeholder="Придумайте пароль (от 8 символов)" autocomplete="new-password" style="${PW}"><input type="password" id="lp2" placeholder="Повторите пароль" autocomplete="new-password" style="${PW}">
               <div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><button class="btn primary" id="sendlink">Отправить письмо для подтверждения</button></div>`) : ''}
-          ${(authed || (legacy && S().seen.cloudLogin)) ? `<details class="card soft" id="chpw"><summary>Сменить пароль</summary>
+          ${(authed || (legacy && S().seen.cloudLogin)) ? `<div class="card soft" id="chpw"><b>🔒 Сменить пароль</b>
             <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="${PW};margin-top:8px"><input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="${PW}"><input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="${PW}">
-            <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button><p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></details>` : ''}
+            <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button><p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></div>` : ''}
           <div class="row"><button class="btn" id="logout">Выйти</button></div>
           <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по email и паролю.</p></div>`;
       })()}
+
+      <div class="card"><h3>Режим занятий</h3>
+        <label class="muted">Минут в день</label><select id="mins">${[15, 20, 30, 45, 60, 90].map(m => `<option value="${m}" ${m === p.minutesPerDay ? 'selected' : ''}>${m} минут</option>`).join('')}</select>
+        <p class="muted" style="margin-bottom:4px">Дни самостоятельных занятий</p><div class="choices" id="sd">${order.map(d => `<button class="choice day ${p.studyDays.includes(d) ? 'on' : ''}" data-d="${d}">${U.DAYS[d]}</button>`).join('')}</div>
+        <p class="muted" style="margin-bottom:4px">Дни занятий с преподавателем</p><div class="choices" id="ld">${order.map(d => `<button class="choice day ${(p.liveDays || []).includes(d) ? 'on' : ''}" data-d="${d}">${U.DAYS[d]}</button>`).join('')}</div>
+        <label class="muted" style="display:block;margin-top:12px">Удобное время</label><select id="bt">${[['morning', 'Утро'], ['day', 'День'], ['evening', 'Вечер'], ['late', 'Поздно вечером']].map(([k, l]) => `<option value="${k}" ${k === p.bestTime ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <label class="muted" style="display:block;margin-top:12px">Стиль общения Эми</label><select id="tone">${[['soft', 'Мягко'], ['firm', 'Чётко и по делу'], ['fun', 'С юмором']].map(([k, l]) => `<option value="${k}" ${k === p.tone ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <label class="muted" style="display:block;margin-top:12px">Срок достижения B1 (необязательно)</label><input type="date" id="dl" value="${p.deadline || ''}">
+        <div id="est" class="muted" style="margin:10px 0"></div>
+        <button class="btn primary block" id="save">Сохранить</button></div>
+      <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
+      <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
       <div class="card"><h3>Данные</h3><p class="muted">Прогресс хранится в этом браузере. Сделай копию, чтобы перенести на другое устройство или отправить преподавателю.</p>
         <div class="row"><button class="btn" id="exp">⬇️ Скачать прогресс</button><button class="btn" id="imp">⬆️ Загрузить</button><input type="file" id="file" accept=".json" hidden></div>
         <details style="margin-top:12px"><summary>Начать заново</summary><p class="muted">Удалит все ответы, прогресс и тексты на этом устройстве.</p><button class="btn" style="color:var(--bad)" id="reset">Удалить всё</button></details></div>

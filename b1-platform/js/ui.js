@@ -10,7 +10,7 @@
     { h: '#/plan', ic: '🗺️', t: 'План', m: p => p === '/plan' || p.startsWith('/unit/') },
     { h: '#/words', ic: '🔤', t: 'Слова', m: p => p === '/words' },
     { h: '#/progress', ic: '📈', t: 'Прогресс', m: p => p === '/progress' },
-    { h: '#/more', ic: '⚙️', t: 'Ещё', m: p => p === '/more' }
+    { h: '#/more', ic: '👤', t: 'Профиль', m: p => p === '/more' }
   ];
   ui.set = (html, o) => {
     o = o || {};
