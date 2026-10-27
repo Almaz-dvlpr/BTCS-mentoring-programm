@@ -108,7 +108,7 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   await p.goto(url + '#/admin'); await p.waitForSelector('#em').catch(async () => { await p.evaluate(() => JP.cloud.logoutStudent()); await p.goto(url + '#/admin'); await p.waitForSelector('#em'); });
   await p.fill('#em', 'almirzhan@gmail.com'); await p.fill('#pw', 'wrong'); await p.click('#in'); await p.waitForSelector('#msg:has-text("Неверный")'); ok(true, 'неверный пароль преподавателя отклоняется');
   await p.fill('#pw', 'secret123'); await p.click('#in'); await p.waitForSelector('.adm-side');
-  ok(await p.locator('.adm-side nav a').count() === 3 && await p.locator('text=Требуют внимания').count() === 1, 'после входа открывается обзор с разделами «Обзор / Ученики / Коды»');
+  ok(await p.locator('.adm-side nav a').count() === 4 && await p.locator('text=Требуют внимания').count() === 1, 'после входа открывается обзор с разделами «Обзор / Ученики / Коды / Глазами ученика»');
   await p.click('.adm-side nav a:has-text("Ученики")'); await p.waitForSelector('#list .adm-tr');
   ok(await p.locator('#list .adm-tr:has-text("Мария")').count() === 1 && await p.locator('text=maria@mail.com').count() > 0, 'в списке ученик виден с подтверждённым email');
   await p.fill('#q', 'maria@'); ok(await p.locator('#list .adm-tr').count() === 1, 'поиск по email работает'); await p.fill('#q', 'нет такого'); await p.waitForSelector('text=Никого не нашли'); await p.fill('#q', '');
@@ -127,6 +127,28 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   await p4.evaluate(() => { const db = JSON.parse(localStorage.getItem('__mockdb')); db.users['maria.new@mail.com'].confirmed = true; localStorage.setItem('__mockdb', JSON.stringify(db)); });
   await p4.click('#go'); await p4.waitForFunction(() => JP.cloud.authed);
   ok((await p4.evaluate(() => JSON.parse(localStorage.getItem('__mockdb')).students.find(s => s.id === 's1').email)) === 'maria.new@mail.com' && await p4.evaluate(() => !!JP.store.get().units['eg-1']), 'по коду сброса ученик входит с новым email, прогресс сохранён');
+  // ===== E. Просмотр глазами ученика =====
+  await p.goto(url + '#/admin/preview'); await p.waitForSelector('#pdemo');
+  const own = await p.evaluate(() => localStorage.getItem('b1.platform.v1')); const pushes0 = (await DB(p)).pushes;
+  const grab = async sel => { await p.evaluate(() => { window.__pv = null; window.open = u => { window.__pv = u; return {}; }; }); await p.click(sel); const u = await p.evaluate(() => window.__pv); return u.replace(/^.*?\/\?/, url + '?'); };
+  const demoUrl = await grab('#pdemo'); ok(/preview=demo/.test(demoUrl), 'кнопка «Тестовый ученик с прогрессом» открывает платформу в режиме просмотра');
+  const v = await ctx.newPage(); v.on('pageerror', e => errs.push('v: ' + e.message)); v.on('console', m => m.type() === 'error' && !/ERR_TUNNEL|ERR_NAME/.test(m.text()) && errs.push('v: ' + m.text()));
+  await v.goto(demoUrl); await v.waitForSelector('#previewbar'); await v.waitForSelector('h1:has-text("Тестовый ученик")');
+  ok(await v.locator('#previewbar:has-text("все этапы открыты")').count() === 1, 'сверху заметная полоса «режим просмотра»');
+  ok(await v.evaluate(() => JP.store.get().profile.name === 'Тестовый ученик' && Object.keys(JP.store.get().units).length >= 20), 'тестовый ученик с готовым прогрессом открывается без входа');
+  await v.goto(url + '?preview=demo#/unit/mu-9'); await v.waitForSelector('h1'); ok(await v.locator('text=пока закрыт').count() === 0 && await v.locator('h1:has-text("Present perfect continuous")').count() === 1, 'в режиме просмотра открыт любой этап (урок B1 доступен)');
+  await v.goto(url + '#/progress'); await v.waitForSelector('.dash'); ok(await v.locator('.dash:has-text("Календарь занятий")').count() === 1, 'у тестового ученика заполнен дашборд прогресса');
+  await v.evaluate(async () => { JP.E.completeUnit('eg-2', 0.5); JP.store.save(); await JP.cloud.flush(); });
+  const after = await DB(p); ok(after.pushes === pushes0, 'действия в режиме просмотра не отправляются на сервер');
+  ok((await p.evaluate(() => localStorage.getItem('b1.platform.v1'))) === own, 'настоящие данные браузера не затронуты');
+  await v.click('#pvexit'); await v.waitForURL(/#\/admin/, { timeout: 8000 }).catch(() => {}); await v.waitForTimeout(400); ok(/#\/admin/.test(v.url()) && await v.evaluate(() => !sessionStorage.getItem('b1.preview')), 'кнопка «Выйти из просмотра» возвращает в кабинет и снимает режим просмотра');
+  await p.goto(url + '#/admin/preview'); await p.waitForSelector('#pnew'); const newUrl = await grab('#pnew');
+  const v2 = await ctx.newPage(); await v2.goto(newUrl); await v2.waitForSelector('#chat'); ok(await v2.locator('#previewbar:has-text("с нуля")').count() === 1, '«Новый ученик с нуля» открывает знакомство с Эми без входа'); await v2.close();
+  await p.goto(url + '#/admin/preview'); await p.waitForSelector('[data-as]'); const asUrl = await grab('[data-as]'); ok(/preview=student/.test(asUrl) && /as=/.test(asUrl), 'у каждого ученика есть кнопка «Открыть» (просмотр его глазами)');
+  const v3 = await ctx.newPage(); await v3.goto(asUrl); await v3.waitForSelector('#previewbar'); await v3.waitForSelector('h1');
+  ok(await v3.evaluate(() => !!JP.store.get().units['eg-1']) && await v3.locator('#previewbar:has-text("не сохраняются")').count() === 1, 'просмотр «как ученик» показывает его прогресс и предупреждает, что изменения не сохраняются');
+  await v3.close(); await v.close();
+
   ok(errs.length === 0, 'нет ошибок в консоли' + (errs.length ? ': ' + errs.slice(0, 3).join(' | ') : ''));
   await b.close(); console.log(fails ? fails + ' проверок не пройдено' : 'Все проверки пройдены'); process.exit(fails ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

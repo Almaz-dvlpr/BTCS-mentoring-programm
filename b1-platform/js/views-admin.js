@@ -115,7 +115,7 @@
     students.forEach(st => { st.sum = st.state && st.state.units ? JP.studentSummary(st.state) : { onboarded: false }; });
     return (cache = { at: Date.now(), students, invites });
   }
-  const NAV = [['#/admin', '📊', 'Обзор', p => p === '/admin'], ['#/admin/students', '👥', 'Ученики', p => p === '/admin/students' || p.startsWith('/admin/s/')], ['#/admin/codes', '🔑', 'Коды', p => p === '/admin/codes']];
+  const NAV = [['#/admin', '📊', 'Обзор', p => p === '/admin'], ['#/admin/students', '👥', 'Ученики', p => p === '/admin/students' || p.startsWith('/admin/s/')], ['#/admin/codes', '🔑', 'Коды', p => p === '/admin/codes'], ['#/admin/preview', '👁', 'Глазами ученика', p => p === '/admin/preview']];
   function shell(path, title, body, o) {
     o = o || {};
     ui.set(`<div class="adm"><aside class="adm-side"><div class="adm-brand">Путь к B1<small>кабинет преподавателя</small></div>
@@ -205,10 +205,11 @@
     const rep = has ? JP.teacherReport(st.state) : '';
     out(`<a href="#/admin/students" class="muted">← все ученики</a>
       <div class="d-card" style="margin-top:8px"><div class="row between"><div><h2 class="d-h2" style="font-size:1.5rem">${esc(st.name)}</h2><div class="muted">${st.email ? 'Email: <b>' + esc(st.email) + '</b>' : st.login ? 'Логин: <b>' + esc(st.login) + '</b> (email не привязан)' : 'Email не привязан'} · регистрация ${U.fmt(st.created_at.slice(0, 10))} · последний вход: ${ago(st.last_seen)}</div></div>
-        <div class="row"><button class="btn small" id="rec">🔑 Сброс доступа</button><button class="btn small" id="exp">⬇️ Данные</button><button class="btn small ghost" id="del" style="color:var(--bad)">Удалить</button></div></div><div id="newcode"></div></div>
+        <div class="row"><button class="btn small" id="asstu">👁 Как видит ученик</button><button class="btn small" id="rec">🔑 Сброс доступа</button><button class="btn small" id="exp">⬇️ Данные</button><button class="btn small ghost" id="del" style="color:var(--bad)">Удалить</button></div></div><div id="newcode"></div></div>
       <div class="adm-tabs"><button class="choice on" data-t="dash">Прогресс</button><button class="choice" data-t="rep">Отчёт для занятия</button></div>
       <div id="t-dash">${dash}</div><div id="t-rep" hidden>${rep}</div>`);
     ui.$$('.adm-tabs .choice').forEach(b => b.onclick = () => { ui.$$('.adm-tabs .choice').forEach(x => x.classList.toggle('on', x === b)); ui.$('#t-dash').hidden = b.dataset.t !== 'dash'; ui.$('#t-rep').hidden = b.dataset.t !== 'rep'; });
+    ui.$('#asstu').onclick = () => openPreview('student', st);
     ui.$('#rec').onclick = async () => { try { const code = await C.createInvite('сброс доступа: ' + st.name, st.id); cache = null; showCode(code, st.name, 'Код сброса доступа'); U.toast('Код создан: ученик зарегистрируется заново, прогресс сохранится'); } catch (x) { U.toast(C.err(x)); } };
     ui.$('#exp').onclick = () => ui.download(st.name.replace(/\W+/g, '_') + '-' + U.today() + '.json', JSON.stringify(st.state || {}, null, 1), 'application/json');
     ui.$('#del').onclick = async () => { if (confirm('Удалить ученика «' + st.name + '» вместе со всем прогрессом? Это нельзя отменить.')) { try { await C.deleteStudent(st.id); cache = null; ui.go('#/admin/students'); } catch (x) { U.toast(C.err(x)); } } };
@@ -218,6 +219,27 @@
     el.innerHTML = `<div class="card soft" style="margin:12px 0 0;text-align:center"><div class="muted">${esc(title || 'Код создан')} (действует один раз)</div><div style="font-size:1.8rem;font-weight:800;letter-spacing:.12em;margin:6px 0">${esc(code)}</div><div class="row" style="justify-content:center"><button class="btn small" id="cc">Копировать код</button><button class="btn small primary" id="ci">Приглашение со ссылкой</button></div></div>`;
     ui.$('#cc').onclick = () => copy(code); ui.$('#ci').onclick = () => share(inviteText(code, label || ''));
   }
+
+  // ---------- Просмотр глазами ученика ----------
+  // Открывает платформу в новой вкладке в изолированном режиме: отдельное хранилище, без сервера, все этапы открыты.
+  function openPreview(kind, st) {
+    try {
+      if (kind === 'demo') localStorage.setItem('b1.preview.v1', JSON.stringify(JP.demoState()));
+      else if (kind === 'student' && st && st.state && st.state.units) localStorage.setItem('b1.preview.v1', JSON.stringify(st.state));
+      else localStorage.removeItem('b1.preview.v1');
+    } catch (e) { return U.toast('Не удалось подготовить просмотр'); }
+    const u = siteUrl() + '?preview=' + kind + (st ? '&as=' + encodeURIComponent(st.name) : '') + '#/';
+    if (!window.open(u, '_blank')) location.href = u;
+  }
+  ui.route('/admin/preview', () => guard('/admin/preview', 'Глазами ученика', (d, out) => {
+    out(`<p class="muted">Платформа открывается в новой вкладке так, как её видит ученик. Это безопасно: настоящие данные и сервер не затрагиваются, всё остаётся только в той вкладке. Все этапы курса открыты, чтобы вы могли пройтись по любому уроку.</p>
+      <div class="d-main"><div class="d-card"><h2 class="d-h2">Тестовый ученик с прогрессом</h2><p class="muted">Заполненный дашборд, повторения, проверки и письменная работа. Удобно смотреть, как выглядят экраны и уроки.</p><button class="btn primary" id="pdemo">Открыть</button></div>
+        <div class="d-card"><h2 class="d-h2">Новый ученик с нуля</h2><p class="muted">Знакомство с Эми, диагностика и первое занятие: путь, который проходит ученик после регистрации.</p><button class="btn primary" id="pnew">Открыть</button></div></div>
+      <div class="d-card"><h2 class="d-h2">Как видит конкретный ученик</h2><p class="muted">Откроется копия его текущего прогресса. Что вы там нажмёте, у ученика не изменится.</p>
+        ${d.students.length ? d.students.map(x => `<div class="adm-row"><span class="grow"><b>${esc(x.name)}</b><br><small class="muted">${x.sum && x.sum.onboarded ? Math.round(x.sum.progress * 100) + '% · этап ' + x.sum.stage : 'знакомство не пройдено'}</small></span><button class="btn small" data-as="${esc(x.id)}">Открыть</button></div>`).join('') : '<p class="muted">Учеников пока нет.</p>'}</div>`);
+    ui.$('#pdemo').onclick = () => openPreview('demo'); ui.$('#pnew').onclick = () => openPreview('new');
+    ui.$$('[data-as]').forEach(b => b.onclick = () => openPreview('student', d.students.find(x => x.id === b.dataset.as)));
+  }));
 
   // ---------- Коды ----------
   const CF = { f: 'free' };

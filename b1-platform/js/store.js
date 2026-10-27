@@ -1,5 +1,13 @@
 (function (JP) {
-  const KEY = 'b1.platform.v1';
+  // Режим просмотра (из кабинета преподавателя): отдельное хранилище, без связи с сервером
+  let previewInfo = null;
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('preview')) { previewInfo = { kind: q.get('preview'), name: q.get('as') || '' }; sessionStorage.setItem('b1.preview', JSON.stringify(previewInfo)); history.replaceState(null, '', location.pathname + location.hash); }
+    else { const p = sessionStorage.getItem('b1.preview'); if (p) previewInfo = JSON.parse(p); }
+  } catch (e) {}
+  JP.preview = previewInfo;
+  const KEY = previewInfo ? 'b1.preview.v1' : 'b1.platform.v1';
   const defaults = () => ({
     v: 1, createdAt: Date.now(),
     profile: null,        // answers of the questionnaire
@@ -22,6 +30,7 @@
   JP.store = {
     get: () => state,
     save() { if (swapped) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} },
+    blank: () => defaults(),
     reset() { state = defaults(); this.save(); },
     // временно подставить чужие данные (кабинет преподавателя); возвращает функцию отката
     swap(obj) { const old = state; state = Object.assign(defaults(), obj); swapped = true; return () => { state = old; swapped = false; }; },

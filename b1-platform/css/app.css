@@ -247,3 +247,7 @@ pre.report { white-space: pre-wrap; background: var(--card); border: 1px solid v
 .irr-head span:nth-child(n+4) { display: none; }
 .irr-row { padding: 9px 0; border-top: 1px solid var(--line); } .irr-row:first-of-type { border-top: 0; }
 .irr-b { display: flex; flex-direction: column; line-height: 1.25; }
+
+/* режим просмотра */
+#previewbar { position: sticky; top: 0; z-index: 70; background: #b45309; color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; font-size: .9rem; font-weight: 600; }
+#previewbar button { appearance: none; border: 1px solid rgba(255,255,255,.7); background: transparent; color: #fff; border-radius: 8px; padding: 4px 10px; font: inherit; cursor: pointer; margin-left: 6px; }

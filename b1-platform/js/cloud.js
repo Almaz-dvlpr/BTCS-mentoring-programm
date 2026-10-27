@@ -9,11 +9,11 @@
   C.sb = sb;
 
   const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} } };
-  const get = () => ls.get(TOKEN_KEY);
+  const get = () => (JP.preview ? null : ls.get(TOKEN_KEY));
   const pending = () => { try { return JSON.parse(ls.get(PENDING_KEY) || 'null'); } catch (e) { return null; } };
   const setPending = o => ls.set(PENDING_KEY, o ? JSON.stringify(o) : null);
   C.token = get; C.pending = pending;
-  C.hasAccess = () => !!get() || C.authed;
+  C.hasAccess = () => !!JP.preview || !!get() || C.authed;
   C.err = e => {
     const m = String((e && e.message) || e || '');
     const map = [[/bad_code/, 'Код не найден или уже использован. Проверьте символы или попросите новый код.'], [/name_required/, 'Впишите своё имя.'], [/login_taken/, 'Этот логин уже занят, придумайте другой.'],
@@ -33,7 +33,7 @@
   };
   let timer = null, inflight = false, dirty = false;
   const push = async () => {
-    if (!C.enabled || !C.hasAccess() || JP.store.isSwapped()) return;
+    if (!C.enabled || JP.preview || !C.hasAccess() || JP.store.isSwapped()) return;
     if (inflight) { dirty = true; return; }
     inflight = true; dirty = false;
     try {
@@ -42,7 +42,7 @@
     } catch (e) { C.status = /bad_token/.test(String(e.message)) ? 'revoked' : 'err'; }
     inflight = false; if (dirty) schedule();
   };
-  const schedule = () => { if (!C.enabled || !C.hasAccess() || JP.store.isSwapped()) return; clearTimeout(timer); timer = setTimeout(push, 2500); };
+  const schedule = () => { if (!C.enabled || JP.preview || !C.hasAccess() || JP.store.isSwapped()) return; clearTimeout(timer); timer = setTimeout(push, 2500); };
   C.flush = () => { clearTimeout(timer); return push(); };
   const origSave = JP.store.save.bind(JP.store);
   JP.store.save = function () { origSave(); schedule(); };
@@ -134,7 +134,7 @@
 
   // ---------- Запуск ----------
   C.ready = (async () => {
-    if (!C.enabled) return;
+    if (!C.enabled || JP.preview) return;
     try { await C.resolve(); } catch (e) {}
     if (get() && !C.authed) { try { await C.me().then(() => { C.status = 'ok'; }); } catch (e) { C.status = /bad_token/.test(String(e.message)) ? 'revoked' : 'err'; } }
     else if (C.authed) { try { await push(); } catch (e) {} }

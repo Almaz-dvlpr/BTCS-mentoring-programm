@@ -196,7 +196,7 @@
         <button class="btn primary block" id="save">Сохранить</button></div>
       <div class="card"><h3>Календарь</h3><p class="muted">Скачай файл и открой его в Google Calendar / Apple Calendar — занятия будут повторяться каждую неделю с напоминанием за 10 минут.</p><button class="btn block" id="ics">📅 Скачать .ics</button></div>
       <div class="card"><h3>Звук</h3><label class="check"><input type="checkbox" id="snd" ${S().settings.sound ? 'checked' : ''}><span>Озвучивать правильные предложения после ответа</span></label>${U.canSpeak() ? '' : '<p class="muted">В этом браузере озвучка недоступна.</p>'}</div>
-      ${(() => {
+      ${JP.preview ? '<div class="card warm"><h3>Аккаунт</h3><p class="muted" style="margin:0">Режим просмотра: вход и сервер отключены, все действия остаются только в этом окне.</p></div>' : (() => {
         const C = JP.cloud, authed = !!(C && C.authed), legacy = !!(C && C.token() && !authed), PW = 'width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px';
         const who = authed ? ' (' + esc(S().seen.cloudEmail || C.email || '') + ')' : S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : '';
         const status = (authed || legacy) ? 'Прогресс сохраняется на сервере автоматически' + (C.status === 'ok' ? ' ✓' : C.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : C.status === 'revoked' ? ' — доступ отозван, войдите снова' : '') + '.' : 'Вход не выполнен: данные только на этом устройстве.';
@@ -231,7 +231,7 @@
       const d = E.day(U.today()); d.built = false; JP.store.save(); U.toast('Сохранено ✓'); upd();
     };
     ui.$('#ics').onclick = () => ui.download('put-k-b1.ics', E.icsFor(), 'text/calendar');
-    ui.$('#logout').onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, вход — по email и паролю.')) return; if (JP.cloud && JP.cloud.hasAccess()) { await JP.cloud.flush(); await JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
+    const lo = ui.$('#logout'); if (lo) lo.onclick = async () => { if (!confirm('Выйти на этом устройстве? Прогресс сохранён на сервере, вход — по email и паролю.')) return; if (JP.cloud && JP.cloud.hasAccess()) { await JP.cloud.flush(); await JP.cloud.logoutStudent(); } JP.store.reset(); JP.E.invalidate(); location.hash = '#/login'; location.reload(); };
     const cp = ui.$('#savechpw'); if (cp) cp.onclick = async () => {
       const m = ui.$('#cmsg'), v = id => ui.$('#' + id).value; m.style.color = 'var(--bad)';
       if (!v('op')) { m.textContent = 'Введите текущий пароль.'; return; }

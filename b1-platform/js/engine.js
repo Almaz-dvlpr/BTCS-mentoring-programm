@@ -63,6 +63,7 @@
   const stageTestOk = n => { const t = S().stageTests[n]; return !!t && !!(t.passed || t.waived); };
   E.stageDone = n => E.roadmap()[n - 1].items.every(it => E.isDone(it.id));
   E.unlockedStage = () => {
+    if (JP.preview) return 4; // в режиме просмотра преподаватель видит все этапы
     let n = 1;
     while (n < 4 && E.stageDone(n) && stageTestOk(n)) n++;
     return n;
