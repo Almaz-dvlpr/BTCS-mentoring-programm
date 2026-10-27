@@ -25,6 +25,17 @@ let fails = 0; const ok = (c, m) => { console.log((c ? '✓ ' : '✗ ') + m); if
   await p.goto(url + '#/verbs'); await p.waitForSelector('#list .irr-row');
   ok(await p.locator('#list .irr-row').count() === 140, 'справочник содержит все 140 глаголов');
   await p.fill('#q', 'идти'); ok(await p.locator('#list .irr-row').count() >= 1, 'поиск по переводу работает'); await p.fill('#q', '');
+  // таблица для самостоятельного изучения
+  ok(await p.locator('#irrtable .irr-head').count() === 1 && await p.locator('#irrtable #print').count() === 1 && await p.locator('#irrtable #csv').count() === 1, 'есть таблица для самостоятельного изучения с печатью и выгрузкой .csv');
+  await p.selectOption('#hide', 'both'); ok(await p.locator('#list .irr-c.hid').count() === 280, 'режим «Скрыть обе формы» закрывает 2-ю и 3-ю форму у всех 140 глаголов');
+  const firstHidden = p.locator('#list .irr-c.hid').first(); const key = await firstHidden.getAttribute('data-b'); await firstHidden.click();
+  ok(await p.locator('#list .irr-c.hid').count() === 279, 'клик по закрытой ячейке показывает ответ');
+  await p.click('#revealall'); ok(await p.locator('#list .irr-c.hid').count() === 0, '«Показать все ответы» открывает всё'); await p.selectOption('#hide', 'ru'); ok(await p.locator('#list small.irr-c.hid').count() === 140, 'режим «Скрыть перевод» закрывает перевод'); await p.selectOption('#hide', 'none');
+  await p.selectOption('#setf', '2'); ok(await p.locator('#list .irr-row').count() === 10, 'фильтр по набору показывает 10 глаголов'); await p.selectOption('#setf', '0');
+  await p.locator('[data-know="go"]').check(); await p.locator('[data-know="see"]').check();
+  ok(await p.evaluate(() => Object.keys(JP.store.get().irrMarks).sort().join()) === 'go,see' && (await p.locator('#knownc').textContent()).startsWith('2 из'), 'отметка «знаю» сохраняется в прогрессе, счётчик обновляется');
+  await p.click('#kflt [data-k=known]'); ok(await p.locator('#list .irr-row').count() === 2, 'фильтр «Знаю» показывает только отмеченные'); await p.click('#kflt [data-k=todo]'); ok(await p.locator('#list .irr-row').count() === 138, 'фильтр «Ещё не знаю» скрывает отмеченные'); await p.click('#kflt [data-k=all]');
+  await p.click('#shuf'); const order = await p.locator('#list .irr-b b').allTextContents(); ok(order.slice(0, 5).join() !== 'be,have,do,go,come', 'режим «Вперемешку» меняет порядок глаголов');
   await p.click('#exam'); await solve(4); await p.waitForSelector('.emoji-xl');
   const cp = await p.evaluate(() => JP.store.get().checkpoints.filter(c => c.type === 'irregular'));
   ok(cp.length === 1 && cp[0].n === 30, 'экзамен (15 глаголов × 2 формы) записан в историю проверок');

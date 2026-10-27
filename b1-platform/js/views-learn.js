@@ -161,15 +161,38 @@
       <div class="grid3"><div class="card stat"><b>${st.total}</b><small>всего глаголов</small></div><div class="card stat"><b>${st.learned}</b><small>изучено</small></div><div class="card stat"><b>${st.known}</b><small>запомнено крепко</small></div></div>
       <div class="card"><h3 style="margin-top:0">Проверка</h3><p class="muted">Впиши 2-ю и 3-ю форму. Результат попадёт в отчёт преподавателя.</p>
         <div class="row"><button class="btn primary" id="exam">Экзамен: 15 глаголов</button><button class="btn" id="mine" ${st.learned ? '' : 'disabled'}>Только изученные</button><button class="btn ghost" id="mc">Быстрая тренировка</button></div></div>
-      <div class="card"><div class="row"><input type="text" id="q" placeholder="Найти глагол (go, идти…)" class="grow"><label class="check" style="margin:0"><input type="checkbox" id="onlyl"><span>только изученные</span></label></div><div id="list" style="margin-top:8px"></div></div>`);
+      <div class="card" id="irrtable"><h3 style="margin-top:0">Таблица для самостоятельного изучения</h3>
+        <p class="muted" style="margin-top:0">Учи по рядам: прочитай вслух три формы, затем закрой столбец и проверь себя. Нажми на закрытую ячейку, чтобы увидеть ответ. Отмечай галочкой глаголы, которые уже знаешь.</p>
+        <div class="irr-prog"><div class="row between"><b id="knownc"></b><small class="muted">отмечено «знаю»</small></div><div class="bar" style="margin-top:6px"><i id="knownbar"></i></div></div>
+        <div class="irr-tools"><input type="text" id="q" placeholder="Найти глагол (go, идти…)" class="grow">
+          <select id="hide" aria-label="Что скрыть"><option value="none">Показать всё</option><option value="p">Скрыть 2-ю форму</option><option value="pp">Скрыть 3-ю форму</option><option value="both">Скрыть обе формы</option><option value="ru">Скрыть перевод</option></select>
+          <select id="setf" aria-label="Набор"><option value="0">Все наборы</option>${Array.from({ length: D.irregularSets }, (_, i) => `<option value="${i + 1}">Набор ${i + 1}</option>`).join('')}</select></div>
+        <div class="choices" id="kflt" style="margin:8px 0">${[['all', 'Все'], ['todo', 'Ещё не знаю'], ['known', 'Знаю']].map(([k, l]) => `<button class="choice" data-k="${k}">${l}</button>`).join('')}<button class="choice" id="shuf" aria-pressed="false">🔀 Вперемешку</button></div>
+        <div class="row" style="margin-bottom:8px"><button class="btn small" id="print">🖨 Печать</button><button class="btn small" id="csv">⬇️ Скачать .csv</button><button class="btn small ghost" id="revealall">Показать все ответы</button></div>
+        <div id="list"></div></div>`);
+    const marks = () => { const t = S(); t.irrMarks = t.irrMarks || {}; return t.irrMarks; };
+    const T = { k: 'all', shuf: false, order: null }; const shown = new Set(); // открытые вручную ячейки «база:столбец»
+    const updProg = () => { const n = Object.keys(marks()).filter(b => marks()[b]).length; ui.$('#knownc').textContent = n + ' из ' + D.irregular.length; ui.$('#knownbar').style.width = Math.round(n / D.irregular.length * 100) + '%'; };
     const draw = () => {
-      const q = ui.$('#q').value.trim().toLowerCase(), only = ui.$('#onlyl').checked;
-      const rows = D.irregular.filter(v => (!q || v.b.includes(q) || v.ru.toLowerCase().includes(q) || v.p.includes(q) || v.pp.includes(q)) && (!only || learned.has(v.b)));
-      ui.$('#list').innerHTML = `<div class="irr-head"><span>Инфинитив</span><span>Past Simple</span><span>Past Participle</span></div>` + (rows.map(v => { const c = E.irrCardIds(v.b).map(id => S().cards[id]); const ok = c[0] && c[1] && c[0].box >= 3 && c[1].box >= 3;
-        return `<div class="irr-row"><span class="irr-b"><b>${esc(v.b)}</b><small class="muted">${esc(v.ru)}</small></span><span>${esc(v.p)}</span><span>${esc(v.pp)}</span><button class="icon-btn" data-say="${esc(sayForms(v))}" aria-label="Произнести">${ok ? '✅' : '🔊'}</button></div>`; }).join('') || '<p class="muted">Ничего не найдено.</p>');
+      const q = ui.$('#q').value.trim().toLowerCase(), hide = ui.$('#hide').value, setf = +ui.$('#setf').value; const mk = marks();
+      let rows = D.irregular.filter(v => (!q || v.b.includes(q) || v.ru.toLowerCase().includes(q) || v.p.includes(q) || v.pp.includes(q)) && (!setf || v.set === setf) && (T.k === 'all' || (T.k === 'known' ? mk[v.b] : !mk[v.b])));
+      if (T.shuf) { if (!T.order) T.order = U.shuffle(D.irregular.map(v => v.b)); rows = rows.slice().sort((a, b) => T.order.indexOf(a.b) - T.order.indexOf(b.b)); }
+      const cell = (v, col, text) => { const hidden = (hide === col || hide === 'both') && !shown.has(v.b + ':' + col); return `<span class="irr-c ${hidden ? 'hid' : ''}" data-b="${esc(v.b)}" data-c="${col}" ${hidden ? 'role="button" tabindex="0" title="Нажми, чтобы показать"' : ''}>${hidden ? '•••' : esc(text)}</span>`; };
+      ui.$('#list').innerHTML = `<div class="irr-head"><span>Инфинитив · перевод</span><span>Past Simple</span><span>Past Participle</span><span>Знаю</span></div>` + (rows.map(v => { const ruHid = hide === 'ru' && !shown.has(v.b + ':ru');
+        return `<div class="irr-row ${mk[v.b] ? 'known' : ''}"><span class="irr-b"><span><b>${esc(v.b)}</b> <button class="icon-btn" data-say="${esc(sayForms(v))}" aria-label="Произнести ${esc(v.b)}">🔊</button></span>${ruHid ? `<small class="irr-c hid" data-b="${esc(v.b)}" data-c="ru" role="button" tabindex="0">•••</small>` : `<small class="muted">${esc(v.ru)}</small>`}</span>${cell(v, 'p', v.p)}${cell(v, 'pp', v.pp)}<label class="irr-k"><input type="checkbox" data-know="${esc(v.b)}" ${mk[v.b] ? 'checked' : ''} aria-label="Знаю: ${esc(v.b)}"></label></div>`; }).join('') || '<p class="muted">Ничего не найдено.</p>');
       ui.$$('#list [data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say, 0.8));
+      ui.$$('#list .irr-c.hid').forEach(c => { const open = () => { shown.add(c.dataset.b + ':' + c.dataset.c); draw(); }; c.onclick = open; c.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }; });
+      ui.$$('#list [data-know]').forEach(cb => cb.onchange = () => { const m = marks(); cb.checked ? (m[cb.dataset.know] = 1) : delete m[cb.dataset.know]; JP.store.save(); cb.closest('.irr-row').classList.toggle('known', cb.checked); updProg(); if (T.k !== 'all') draw(); });
+      ui.$$('#kflt [data-k]').forEach(b => b.classList.toggle('on', b.dataset.k === T.k));
+      ui.$('#shuf').classList.toggle('on', T.shuf); ui.$('#shuf').setAttribute('aria-pressed', T.shuf);
     };
-    ui.$('#q').oninput = draw; ui.$('#onlyl').onchange = draw; draw();
+    ui.$('#q').oninput = draw; ui.$('#hide').onchange = () => { shown.clear(); draw(); }; ui.$('#setf').onchange = draw;
+    ui.$$('#kflt [data-k]').forEach(b => b.onclick = () => { T.k = b.dataset.k; draw(); });
+    ui.$('#shuf').onclick = () => { T.shuf = !T.shuf; T.order = null; draw(); };
+    ui.$('#revealall').onclick = () => { D.irregular.forEach(v => ['p', 'pp', 'ru'].forEach(c => shown.add(v.b + ':' + c))); draw(); };
+    ui.$('#print').onclick = () => { ui.$('#hide').value = 'none'; T.k = 'all'; ui.$('#q').value = ''; ui.$('#setf').value = '0'; draw(); window.print(); };
+    ui.$('#csv').onclick = () => ui.download('irregular-verbs.csv', 'infinitive,past simple,past participle,перевод\n' + D.irregular.map(v => [v.b, v.p, v.pp, '"' + v.ru.replace(/"/g, '""') + '"'].join(',')).join('\n'), 'text/csv');
+    updProg(); draw();
     const run = (pool, n, mode, label) => {
       const vs = U.pick(pool, n); const qs = [];
       vs.forEach(v => { if (mode === 'type') { qs.push(irrQuestion(v, 'p', 'type'), irrQuestion(v, 'pp', 'type')); } else qs.push(irrQuestion(v, Math.random() < .5 ? 'p' : 'pp', 'mc')); });
