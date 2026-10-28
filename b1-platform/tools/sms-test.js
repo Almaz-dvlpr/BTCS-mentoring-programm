@@ -56,7 +56,8 @@ const setDB = (pg, body) => pg.evaluate(f => { const db = JSON.parse(localStorag
   // ===== A. Переключатель выключен: телефон не предлагается =====
   let p = await mk();
   ok(await p.locator('#smslogin').count() === 0 && (await p.locator('label[for=lg]').textContent()).trim() === 'Email', 'пока SMS выключен, вход только по email, кнопки SMS нет');
-  await p.click('[data-m=reg]'); ok(await p.locator('[data-meth]').count() === 0 && await p.locator('#em').count() === 1, 'при выключенном SMS регистрация только по email');
+  await p.click('[data-m=reg]'); ok(await p.locator('[data-meth]').count() === 2 && await p.locator('#em').count() === 1, 'вкладки «По телефону» и «По email» видны всегда, по умолчанию email');
+  await p.click('[data-meth=phone]'); ok(await p.locator('#ph').count() === 0 && await p.locator('#go:visible').count() === 0 && (await p.locator('#f').innerText()).includes('скоро заработает'), 'пока SMS выключен, вкладка телефона объясняет и предлагает email');
   await p.context().close();
 
   // ===== B. Включено: регистрация по телефону =====
