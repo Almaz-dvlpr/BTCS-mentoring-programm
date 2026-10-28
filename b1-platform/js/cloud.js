@@ -4,7 +4,7 @@
   const URL = 'https://sbuwwbqteuzeqbtvgcug.supabase.co';
   const KEY = 'sb_publishable_-t7CmS02GtCWhAN5L2KoyA_wQnuEA_U';
   const TOKEN_KEY = 'b1.student.token', PENDING_KEY = 'b1.pending';
-  const C = { enabled: !!(window.supabase && window.supabase.createClient), status: 'off', authed: false, email: null, needClaim: false };
+  const C = { enabled: !!(window.supabase && window.supabase.createClient), status: 'off', authed: false, email: null, phone: null, needClaim: false, smsEnabled: false };
   const sb = C.enabled ? window.supabase.createClient(URL, KEY, { auth: { persistSession: true, storageKey: 'b1.teacher.auth', autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } }) : null;
   C.sb = sb;
 
@@ -20,7 +20,7 @@
       [/weak_password|at least 6|Password should be/i, 'Пароль должен быть не короче 8 символов.'], [/bad_login/, 'Логин должен быть не короче 3 символов.'], [/bad_credentials|Invalid login/i, 'Неверный email/логин или пароль.'],
       [/locked/, 'Слишком много попыток. Подождите 15 минут.'], [/already_set/, 'Пароль уже задан.'], [/already_linked/, 'Этот ученик уже привязан к другому email.'],
       [/Email not confirmed/i, 'Почта ещё не подтверждена: откройте письмо и перейдите по ссылке, затем войдите снова.'], [/rate limit|too many requests|over_email/i, 'Слишком много писем за короткое время. Подождите немного и попробуйте снова.'],
-      [/valid email|invalid format|Unable to validate email/i, 'Проверьте адрес email.'], [/not_authenticated/, 'Сначала войдите.'], [/Failed to fetch|NetworkError/i, 'Нет связи с сервером. Проверьте интернет.']];
+      [/valid email|invalid format|Unable to validate email/i, 'Проверьте адрес email.'], [/Token has expired|invalid.*(otp|token)|otp_expired/i, 'Неверный или просроченный код. Запросите новый.'], [/Error sending.*(otp|sms)|sms.*(provider|disabled|not enabled)|phone provider|provider.*(configured|disabled)|Unsupported phone/i, 'SMS сейчас недоступны. Попробуйте зарегистрироваться по email.'], [/phone.*(invalid|format)|invalid.*phone/i, 'Проверьте номер телефона.'], [/not_authenticated/, 'Сначала войдите.'], [/Failed to fetch|NetworkError/i, 'Нет связи с сервером. Проверьте интернет.']];
     for (const [re, t] of map) if (re.test(m)) return t; return m;
   };
 
@@ -28,7 +28,7 @@
   const accept = data => {
     if (data.token) ls.set(TOKEN_KEY, data.token);
     if (data.state && data.state.units) JP.store.importObj(data.state);
-    const s = JP.store.get(); s.seen.cloudName = data.name || s.seen.cloudName; s.seen.cloudLogin = data.login || s.seen.cloudLogin || null; s.seen.cloudEmail = data.email || s.seen.cloudEmail || null; JP.store.save();
+    const s = JP.store.get(); s.seen.cloudName = data.name || s.seen.cloudName; s.seen.cloudLogin = data.login || s.seen.cloudLogin || null; s.seen.cloudEmail = data.email || s.seen.cloudEmail || null; s.seen.cloudPhone = data.phone || s.seen.cloudPhone || null; JP.store.save();
     return data;
   };
   let timer = null, inflight = false, dirty = false;
@@ -54,7 +54,7 @@
     C.authed = false; C.needClaim = false;
     if (!C.enabled) return;
     const { data: { session } } = await sb.auth.getSession(); if (!session) return;
-    C.email = session.user && session.user.email;
+    C.email = session.user && session.user.email; C.phone = (session.user && session.user.phone) || null;
     let me = await sb.rpc('b1_me', { p_token: null });
     if (me.error) {
       const pd = pending();
@@ -94,8 +94,9 @@
   C.setNewPassword = async pw => { const { error } = await sb.auth.updateUser({ password: pw }); if (error) throw error; };
   C.changePassword = async (oldPw, newPw) => {
     if (C.authed) {
-      const { error: e1 } = await sb.auth.signInWithPassword({ email: C.email, password: oldPw }); if (e1) throw new Error('bad_credentials');
-      const { error } = await sb.auth.updateUser({ password: newPw }); if (error) throw error; return { ok: true };
+      const ident = C.email ? { email: C.email } : { phone: (String(C.phone || '').startsWith('+') ? '' : '+') + C.phone };
+      const { error: e1 } = await sb.auth.signInWithPassword(Object.assign({ password: oldPw }, ident)); if (e1) throw new Error('bad_credentials');
+      const { error } = await sb.auth.updateUser({ password: newPw }); if (error) throw error; JP.store.get().seen.pwSet = true; JP.store.save(); return { ok: true };
     }
     const { data, error } = await sb.rpc('b1_change_password', { p_token: get(), p_old: oldPw, p_new: newPw });
     if (error) throw error; if (data && data.error) throw new Error(data.error); return data;
@@ -119,13 +120,29 @@
   };
   C.me = async () => { const { data, error } = await sb.rpc('b1_me', { p_token: C.authed ? null : get() }); if (error) throw error; return data; };
 
+  // ---------- Телефон и SMS ----------
+  // номер → формат E.164 (+7…): 8701… и 701… приводятся к +7; вернёт null, если не похоже на номер
+  C.normPhone = v => { let d = String(v || '').replace(/[^\d+]/g, ''); if (!d) return null; if (d[0] !== '+') { if (d.length === 11 && (d[0] === '8')) d = '+7' + d.slice(1); else if (d.length === 11 && d[0] === '7') d = '+' + d; else if (d.length === 10) d = '+7' + d; else d = '+' + d; } return /^\+\d{10,15}$/.test(d) ? d : null; };
+  C.looksPhone = v => /^[+\d][\d\s\-()]{8,}$/.test(String(v || '').trim());
+  C.sendOtp = async phone => { const { error } = await sb.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } }); if (error) throw error; };
+  C.verifyOtp = async (phone, token) => { const { error } = await sb.auth.verifyOtp({ phone, token: String(token).replace(/\D/g, ''), type: 'sms' }); if (error) throw error; await C.resolve(); return { linked: C.authed }; };
+  // регистрация нового ученика по телефону: проверка кода приглашения → SMS
+  C.registerPhone = async (code, name, phone) => { const chk = await C.checkCode(code); if (!chk || !chk.ok) throw new Error('bad_code'); setPending({ code, name, phone }); await C.sendOtp(phone); };
+  C.loginPhone = async (phone, password) => { const { error } = await sb.auth.signInWithPassword({ phone, password }); if (error) throw error; await C.resolve(); return { linked: C.authed }; };
+  // ученик со старым входом привязывает телефон
+  C.linkPhone = async phone => { const tok = get(); if (!tok) throw new Error('bad_token'); setPending({ legacyToken: tok, phone }); await C.sendOtp(phone); };
+  C.finishLinkPhone = async (phone, token) => { await C.verifyOtp(phone, token); if (!C.authed) throw new Error(C.claimError || 'already_linked'); return true; };
+  C.setPasswordFirst = async pw => { await C.setNewPassword(pw); const s = JP.store.get(); s.seen.pwSet = true; JP.store.save(); };
+  C.loadSettings = async () => { try { const { data, error } = await sb.rpc('b1_get_settings'); if (!error && data) C.smsEnabled = !!data.sms; } catch (e) {} return C.smsEnabled; };
+  C.setSms = async on => { const { data, error } = await sb.rpc('b1_set_sms', { p_on: !!on }); if (error) throw error; C.smsEnabled = !!data.sms; return C.smsEnabled; };
+
   // ---------- Преподаватель ----------
   C.session = async () => { const { data } = await sb.auth.getSession(); return data.session; };
   C.isTeacher = async () => { const { data, error } = await sb.rpc('b1_is_teacher'); return !error && data === true; };
   C.signIn = async (email, password) => { const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; };
   C.signUp = async (email, password) => { const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + '/#/admin' } }); if (error) throw error; return data; };
   C.signOut = () => sb.auth.signOut();
-  C.students = async () => { const { data, error } = await sb.from('b1_students').select('id,name,login,email,created_at,last_seen,state,state_updated').order('last_seen', { ascending: false }); if (error) throw error; return data; };
+  C.students = async () => { const { data, error } = await sb.from('b1_students').select('id,name,login,email,phone,created_at,last_seen,state,state_updated').order('last_seen', { ascending: false }); if (error) throw error; return data; };
   C.invitesAll = async () => { const { data, error } = await sb.from('b1_invites').select('code,label,student_id,created_at,used_at').order('created_at', { ascending: false }); if (error) throw error; return data; };
   C.invites = async () => { const { data, error } = await sb.from('b1_invites').select('code,label,student_id,created_at,used_at').is('used_at', null).order('created_at', { ascending: false }); if (error) throw error; return data; };
   C.createInvite = async (label, studentId) => { const { data, error } = await sb.rpc('b1_create_invite', { p_label: label || null, p_student_id: studentId || null }); if (error) throw error; return data; };
@@ -136,6 +153,7 @@
   C.ready = (async () => {
     if (!C.enabled || JP.preview) return;
     try { await C.resolve(); } catch (e) {}
+    await C.loadSettings();
     if (get() && !C.authed) { try { await C.me().then(() => { C.status = 'ok'; }); } catch (e) { C.status = /bad_token/.test(String(e.message)) ? 'revoked' : 'err'; } }
     else if (C.authed) { try { await push(); } catch (e) {} }
     sb.auth.onAuthStateChange(evt => {

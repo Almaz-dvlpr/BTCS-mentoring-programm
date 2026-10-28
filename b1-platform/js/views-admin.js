@@ -7,14 +7,46 @@
   const PWSTYLE = 'width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:12px';
   const pwField = (id, label, ac) => `<label class="muted" for="${id}">${label}</label><input type="password" id="${id}" autocomplete="${ac}" style="${PWSTYLE}">`;
   const isEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+  const CODEF = pre => field('code', 'Код приглашения', `placeholder="XXXXX-XXXXX" value="${esc(pre)}" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="14" style="font-size:1.2rem;letter-spacing:.1em;text-transform:uppercase"`);
+  const maskPhone = p => String(p || '').replace(/^(\+\d{1,3})(\d+)(\d{2})$/, (m, c, mid, last) => c + ' ' + '•'.repeat(mid.length) + last);
   ui.route('/login', () => {
-    if (S().profile && C.hasAccess()) return ui.go('#/');
     if (C.hasAccess()) return ui.go('#/');
     const q = (location.hash.split('?')[1] || ''); const pre = (q.match(/(?:^|&)code=([^&]+)/) || [])[1] || '';
-    let mode = C.needClaim && !C.pendingTeacher ? 'claim' : (/(^|&)reg=1/.test(q) || pre) ? 'reg' : 'in'; let sentEmail = '', keepPw = '';
+    const sms = !!C.smsEnabled; // переключатель в кабинете преподавателя
+    let mode = C.needClaim ? 'claim' : (/(^|&)reg=1/.test(q) || pre) ? 'reg' : 'in', method = sms ? 'phone' : 'email';
+    let sentEmail = '', keepPw = '', otp = { phone: '', flow: 'login' }, timer = null;
     const head = `<div class="center" style="margin-top:20px"><div class="emoji-xl">🔑</div><h1>Английский с Эми</h1><p class="muted">Путь к уровню B1 вместе с виртуальным ассистентом.</p></div>`;
-    const done = () => { history.replaceState(null, '', '#/'); ui.dispatch(); };
+    const done = () => { clearInterval(timer); history.replaceState(null, '', '#/'); ui.dispatch(); };
     const draw = () => {
+      clearInterval(timer);
+      if (mode === 'otp') {
+        ui.set(`${head}<form class="card" id="f"><div class="center" style="font-size:2.2rem">📱</div><h2 style="text-align:center;margin:6px 0">Введите код из SMS</h2>
+          <p class="center muted" style="margin-top:0">Мы отправили код на <b>${esc(maskPhone(otp.phone))}</b></p>
+          <input type="text" id="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="______" aria-label="Код из SMS" style="font-size:1.8rem;letter-spacing:.35em;text-align:center;margin-bottom:12px">
+          <div id="msg" role="alert" style="min-height:1.4em;color:var(--bad)"></div>
+          <button class="btn primary block" id="go" type="submit">Подтвердить</button>
+          <button class="btn ghost block" type="button" id="resend" style="margin-top:8px" disabled>Отправить код ещё раз</button>
+          <button class="btn ghost block" type="button" id="back" style="margin-top:4px">Изменить номер</button></form>`, { noTabs: true });
+        const rs = ui.$('#resend'); let left = 30; const tick = () => { rs.textContent = left > 0 ? 'Отправить код ещё раз (' + left + ' с)' : 'Отправить код ещё раз'; rs.disabled = left > 0; left--; }; tick(); timer = setInterval(() => { tick(); if (left < -1) clearInterval(timer); }, 1000);
+        rs.onclick = async () => { rs.disabled = true; const msg = ui.$('#msg'); msg.style.color = 'var(--bad)'; try { await C.sendOtp(otp.phone); msg.style.color = 'var(--ok)'; msg.textContent = 'Новый код отправлен.'; left = 30; tick(); timer = setInterval(tick, 1000); } catch (x) { msg.textContent = C.err(x); rs.disabled = false; } };
+        ui.$('#back').onclick = () => { mode = otp.flow === 'reg' ? 'reg' : 'in'; draw(); };
+        ui.$('#otp').focus();
+        ui.$('#f').onsubmit = async e => { e.preventDefault(); const msg = ui.$('#msg'), go = ui.$('#go'), code = ui.$('#otp').value.replace(/\D/g, ''); msg.style.color = 'var(--bad)';
+          if (code.length < 4) { msg.textContent = 'Введите код из SMS.'; return; } go.disabled = true; go.textContent = 'Проверяю…';
+          try { await C.verifyOtp(otp.phone, code); if (!C.authed) { mode = 'claim'; return draw(); } if (otp.flow === 'reg' || otp.flow === 'forgot') { mode = 'setpw'; return draw(); } return done(); }
+          catch (x) { msg.textContent = C.err(x); go.disabled = false; go.textContent = 'Подтвердить'; } };
+        return;
+      }
+      if (mode === 'setpw') {
+        ui.set(`${head}<form class="card" id="f"><div class="center" style="font-size:2.2rem">✅</div><h2 style="text-align:center;margin:6px 0">${otp.flow === 'forgot' ? 'Задайте новый пароль' : 'Номер подтверждён'}</h2>
+          <p class="muted center" style="margin-top:0">Придумайте пароль, чтобы дальше входить без SMS.</p>${pwField('pw', 'Пароль (не короче 8 символов)', 'new-password')}${pwField('pw2', 'Повторите пароль', 'new-password')}
+          <div id="msg" role="alert" style="min-height:1.4em;color:var(--bad)"></div><button class="btn primary block" id="go" type="submit">Сохранить пароль</button>
+          ${otp.flow === 'forgot' ? '' : '<button class="btn ghost block" type="button" id="skip" style="margin-top:8px">Пропустить (входить по SMS)</button>'}</form>`, { noTabs: true });
+        const sk = ui.$('#skip'); if (sk) sk.onclick = done;
+        ui.$('#f').onsubmit = async e => { e.preventDefault(); const msg = ui.$('#msg'), pw = ui.$('#pw').value; if (pw.length < 8) { msg.textContent = 'Пароль должен быть не короче 8 символов.'; return; } if (pw !== ui.$('#pw2').value) { msg.textContent = 'Пароли не совпадают.'; return; }
+          ui.$('#go').disabled = true; try { await C.setPasswordFirst(pw); done(); } catch (x) { msg.textContent = C.err(x); ui.$('#go').disabled = false; } };
+        return;
+      }
       if (mode === 'sent') {
         ui.set(`${head}<div class="card"><div class="center emoji-xl" style="font-size:2.4rem">📧</div><h2 style="text-align:center;margin-top:8px">Проверьте почту</h2>
           <p>Мы отправили письмо на <b>${esc(sentEmail)}</b>. Откройте его и нажмите на ссылку подтверждения. Письмо может прийти в течение минуты, загляните и в «Спам».</p>
@@ -27,39 +59,48 @@
           catch (x) { msg.textContent = C.err(x); go.disabled = false; if (/подтверждена/.test(msg.textContent) === false && !keepPw) { mode = 'in'; draw(); } } };
         return;
       }
+      const regTabs = mode === 'reg' && sms ? `<div class="row" style="justify-content:center;margin-bottom:10px"><button type="button" class="choice ${method === 'phone' ? 'on' : ''}" data-meth="phone">📱 По телефону</button><button type="button" class="choice ${method === 'email' ? 'on' : ''}" data-meth="email">✉️ По email</button></div>` : '';
       ui.set(`${head}${mode === 'claim' ? '' : `<div class="row" style="justify-content:center;margin-bottom:12px"><button class="choice ${mode === 'in' ? 'on' : ''}" data-m="in">Войти</button><button class="choice ${mode === 'reg' ? 'on' : ''}" data-m="reg">Регистрация по коду</button></div>`}
-        <form class="card" id="f" autocomplete="on">${mode === 'in'
-          ? field('lg', 'Email', 'inputmode="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"') + pwField('pw', 'Пароль', 'current-password')
+        <form class="card" id="f" autocomplete="on">${regTabs}${mode === 'in'
+          ? field('lg', sms ? 'Телефон или email' : 'Email', 'inputmode="email" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"') + pwField('pw', 'Пароль', 'current-password')
           : mode === 'claim'
-            ? `<p style="margin-top:0">Вы вошли как <b>${esc(C.email || '')}</b>. Осталось ввести код приглашения.</p>` + field('code', 'Код приглашения', `placeholder="XXXXX-XXXXX" value="${esc(pre)}" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="14" style="font-size:1.2rem;letter-spacing:.1em;text-transform:uppercase"`) + field('nm', 'Ваше имя', 'placeholder="Как к вам обращаться" maxlength="60" autocomplete="name"')
-            : `<p class="muted" style="margin-top:0">Впервые здесь? Введите код, который вам дал преподаватель, свой email и придумайте пароль. На почту придёт письмо для подтверждения.</p>`
-              + field('code', 'Код приглашения', `placeholder="XXXXX-XXXXX" value="${esc(pre)}" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="14" style="font-size:1.2rem;letter-spacing:.1em;text-transform:uppercase"`)
-              + field('nm', 'Ваше имя', 'placeholder="Как к вам обращаться" maxlength="60" autocomplete="name"')
-              + field('em', 'Email', 'inputmode="email" placeholder="name@example.com" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false"')
-              + pwField('pw', 'Пароль (не короче 8 символов)', 'new-password') + pwField('pw2', 'Повторите пароль', 'new-password')}
+            ? `<p style="margin-top:0">Вы вошли как <b>${esc(C.email || (C.phone ? maskPhone('+' + String(C.phone).replace('+', '')) : ''))}</b>. Осталось ввести код приглашения.</p>` + CODEF(pre) + field('nm', 'Ваше имя', 'placeholder="Как к вам обращаться" maxlength="60" autocomplete="name"')
+            : method === 'phone'
+              ? `<p class="muted" style="margin-top:0">Впервые здесь? Введите код от преподавателя и свой номер телефона: пришлёт SMS с кодом, и вы сразу зарегистрированы.</p>` + CODEF(pre) + field('nm', 'Ваше имя', 'placeholder="Как к вам обращаться" maxlength="60" autocomplete="name"') + field('ph', 'Номер телефона', 'type="tel" inputmode="tel" placeholder="+7 701 123 45 67" autocomplete="tel"')
+              : `<p class="muted" style="margin-top:0">Впервые здесь? Введите код, который вам дал преподаватель, свой email и придумайте пароль. На почту придёт письмо для подтверждения.</p>` + CODEF(pre) + field('nm', 'Ваше имя', 'placeholder="Как к вам обращаться" maxlength="60" autocomplete="name"')
+                + field('em', 'Email', 'inputmode="email" placeholder="name@example.com" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false"') + pwField('pw', 'Пароль (не короче 8 символов)', 'new-password') + pwField('pw2', 'Повторите пароль', 'new-password')}
           <div id="msg" class="muted" role="alert" style="min-height:1.4em;color:var(--bad)"></div>
-          <button class="btn primary block" id="go" type="submit">${mode === 'in' ? 'Войти' : mode === 'claim' ? 'Завершить регистрацию' : 'Зарегистрироваться'}</button>
-          ${mode === 'in' ? '<button class="btn ghost block" type="button" id="forgot" style="margin-top:8px">Забыли пароль?</button><p class="muted" style="margin-bottom:0;font-size:.85rem">Регистрировались раньше по логину? Введите логин вместо email.</p>' : mode === 'claim' ? '<button class="btn ghost block" type="button" id="exit" style="margin-top:8px">Выйти</button>' : '<p class="muted" style="margin-bottom:0;font-size:.85rem">Код действует один раз. Дальше вы входите по email и паролю с любого устройства.</p>'}</form>`, { noTabs: true });
-      ui.$$('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; draw(); });
+          <button class="btn primary block" id="go" type="submit">${mode === 'in' ? 'Войти' : mode === 'claim' ? 'Завершить регистрацию' : method === 'phone' ? 'Получить SMS-код' : 'Зарегистрироваться'}</button>
+          ${mode === 'in' ? `${sms ? '<button class="btn block" type="button" id="smslogin" style="margin-top:8px">📱 Войти по SMS-коду</button>' : ''}<button class="btn ghost block" type="button" id="forgot" style="margin-top:8px">Забыли пароль?</button><p class="muted" style="margin-bottom:0;font-size:.85rem">Регистрировались раньше по логину? Введите логин вместо ${sms ? 'телефона или ' : ''}email.</p>` : mode === 'claim' ? '<button class="btn ghost block" type="button" id="exit" style="margin-top:8px">Выйти</button>' : `<p class="muted" style="margin-bottom:0;font-size:.85rem">Код действует один раз. ${method === 'phone' ? 'Дальше вы входите по номеру и паролю, SMS больше не нужны.' : 'Дальше вы входите по email и паролю с любого устройства.'}</p>`}</form>`, { noTabs: true });
+      ui.$$('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; draw(); }); ui.$$('[data-meth]').forEach(b => b.onclick = () => { method = b.dataset.meth; draw(); });
       if (!C.enabled) ui.$('#msg').textContent = 'Сервер недоступен. Обновите страницу.';
       const ex = ui.$('#exit'); if (ex) ex.onclick = async () => { await C.logoutStudent(); mode = 'in'; draw(); };
-      const fg = ui.$('#forgot'); if (fg) fg.onclick = async () => { const msg = ui.$('#msg'), em = ui.$('#lg').value.trim(); msg.style.color = 'var(--bad)';
-        if (!isEmail(em)) { msg.textContent = 'Введите свой email в поле выше, затем нажмите «Забыли пароль?».'; return; }
-        try { await C.forgot(em); msg.style.color = 'var(--ok)'; msg.textContent = 'Если такой адрес зарегистрирован, мы отправили письмо со ссылкой для нового пароля.'; } catch (x) { msg.textContent = C.err(x); } };
+      const startOtp = async (phone, flow, msg) => { otp = { phone, flow }; await C.sendOtp(phone); mode = 'otp'; draw(); };
+      const sl = ui.$('#smslogin'); if (sl) sl.onclick = async () => { const msg = ui.$('#msg'), ph = C.normPhone(ui.$('#lg').value); msg.style.color = 'var(--bad)'; if (!ph) { msg.textContent = 'Введите номер телефона в поле выше.'; return; } sl.disabled = true; try { await startOtp(ph, 'login'); } catch (x) { msg.textContent = C.err(x); sl.disabled = false; } };
+      const fg = ui.$('#forgot'); if (fg) fg.onclick = async () => { const msg = ui.$('#msg'), id = ui.$('#lg').value.trim(); msg.style.color = 'var(--bad)';
+        if (sms && C.looksPhone(id)) { const ph = C.normPhone(id); if (!ph) { msg.textContent = 'Проверьте номер телефона.'; return; } try { await startOtp(ph, 'forgot'); } catch (x) { msg.textContent = C.err(x); } return; }
+        if (!isEmail(id)) { msg.textContent = 'Введите свой email' + (sms ? ' или телефон' : '') + ' в поле выше, затем нажмите «Забыли пароль?».'; return; }
+        try { await C.forgot(id); msg.style.color = 'var(--ok)'; msg.textContent = 'Если такой адрес зарегистрирован, мы отправили письмо со ссылкой для нового пароля.'; } catch (x) { msg.textContent = C.err(x); } };
       ui.$('#f').onsubmit = async e => {
-        e.preventDefault(); const msg = ui.$('#msg'), go = ui.$('#go'), v = id => (ui.$('#' + id) || {}).value || ''; msg.style.color = 'var(--bad)';
-        const label = go.textContent;
+        e.preventDefault(); const msg = ui.$('#msg'), go = ui.$('#go'), v = id => (ui.$('#' + id) || {}).value || ''; msg.style.color = 'var(--bad)'; const label = go.textContent;
         try {
           if (mode === 'in') {
-            const id = v('lg').trim(), pw = v('pw'); if (!id || !pw) { msg.textContent = 'Введите email и пароль.'; return; }
+            const id = v('lg').trim(), pw = v('pw'); if (!id || !pw) { msg.textContent = 'Введите ' + (sms ? 'телефон или email' : 'email') + ' и пароль.'; return; }
             go.disabled = true; go.textContent = 'Проверяю…';
             if (isEmail(id)) {
               try { await C.loginEmail(id.toLowerCase(), pw); if (C.authed) return done(); mode = 'claim'; return draw(); }
-              catch (x) { if (!/Invalid login|bad_credentials/i.test(String(x.message))) throw x; await C.loginLegacy(id, pw); return done(); } // старый вход: логин мог быть похож на email
+              catch (x) { if (!/Invalid login|bad_credentials/i.test(String(x.message))) throw x; await C.loginLegacy(id, pw); return done(); }
+            } else if (sms && C.looksPhone(id)) {
+              const ph = C.normPhone(id); if (!ph) throw new Error('phone invalid format');
+              try { await C.loginPhone(ph, pw); if (C.authed) return done(); mode = 'claim'; return draw(); } catch (x) { if (/Invalid login|bad_credentials/i.test(String(x.message))) throw new Error('Неверный телефон или пароль. Если пароля нет, нажмите «Войти по SMS-коду».'); throw x; }
             } else { await C.loginLegacy(id, pw); return done(); }
           } else if (mode === 'claim') {
             if (v('code').trim().length < 6) { msg.textContent = 'Введите код целиком.'; return; } if (!v('nm').trim()) { msg.textContent = 'Впишите своё имя.'; return; }
             go.disabled = true; go.textContent = 'Проверяю…'; await C.claim(v('code').trim(), v('nm').trim()); return done();
+          } else if (method === 'phone') {
+            if (v('code').trim().length < 6) { msg.textContent = 'Введите код целиком.'; return; } if (!v('nm').trim()) { msg.textContent = 'Впишите своё имя.'; ui.$('#nm').focus(); return; }
+            const ph = C.normPhone(v('ph')); if (!ph) { msg.textContent = 'Проверьте номер телефона.'; return; }
+            go.disabled = true; go.textContent = 'Отправляю SMS…'; await C.registerPhone(v('code').trim(), v('nm').trim(), ph); otp = { phone: ph, flow: 'reg' }; mode = 'otp'; return draw();
           } else {
             const em = v('em').trim().toLowerCase(), pw = v('pw');
             if (v('code').trim().length < 6) { msg.textContent = 'Введите код целиком.'; return; } if (!v('nm').trim()) { msg.textContent = 'Впишите своё имя.'; ui.$('#nm').focus(); return; }
@@ -104,7 +145,8 @@
 
   // ---------- Данные кабинета (кэш на 30 секунд) ----------
   const siteUrl = () => location.origin + '/';
-  const inviteText = (code, name) => `${name ? name + ', здравствуйте!' : 'Здравствуйте!'} Приглашаю на занятия английским с виртуальным ассистентом.\n1. Откройте ${siteUrl()}#/login?code=${String(code).replace(/-/g, '')}\n2. Впишите имя и email, придумайте пароль и подтвердите почту по письму.\nКод приглашения: ${code} (действует один раз).`;
+  const inviteText = (code, name) => `${name ? name + ', здравствуйте!' : 'Здравствуйте!'} Приглашаю на занятия английским с виртуальным ассистентом.\n1. Откройте ${siteUrl()}#/login?code=${String(code).replace(/-/g, '')}\n2. ${C.smsEnabled ? 'Впишите имя и номер телефона, введите код из SMS и придумайте пароль.' : 'Впишите имя и email, придумайте пароль и подтвердите почту по письму.'}\nКод приглашения: ${code} (действует один раз).`;
+  const contact = x => x.phone ? '+' + String(x.phone).replace('+', '') : x.email || '';
   function copy(t) { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => U.toast(t.includes('\n') && t.length > 60 ? 'Скопировано' : 'Скопировано: ' + t), () => U.toast('Не удалось скопировать')); }
   function share(text) { if (navigator.share) navigator.share({ text }).catch(() => {}); else copy(text); }
   let cache = null;
@@ -167,7 +209,11 @@
         <div class="d-card"><h2 class="d-h2">Лидеры по прогрессу</h2>${top.length ? top.map((x, i) => `<div class="adm-row"><span style="width:22px">${i + 1}</span><span class="grow">${esc(x.name)}<div class="d-bar" style="margin-top:4px"><i style="width:${Math.round(x.sum.progress * 100)}%"></i></div></span><b>${Math.round(x.sum.progress * 100)}%</b></div>`).join('') : '<p class="muted">Данных пока нет.</p>'}</div>
         <div class="d-card warm"><h2 class="d-h2">Пригласить ученика</h2><p class="muted">Ссылка на платформу:</p><div style="font-weight:700;word-break:break-all">${esc(siteUrl())}</div>
           <div class="row" style="margin:10px 0"><button class="btn small" id="cplink">Копировать</button><button class="btn small ghost" id="shlink">Поделиться</button><a class="btn small primary" href="#/admin/codes">Создать код</a></div>
-          <p class="muted" style="font-size:.85rem;margin:0">Ученик открывает ссылку, вводит код, имя и email, придумывает пароль и подтверждает почту по письму.</p></div></div>`);
+          <p class="muted" style="font-size:.85rem;margin:0">${C.smsEnabled ? 'Ученик открывает ссылку, вводит код, имя и номер телефона, затем код из SMS.' : 'Ученик открывает ссылку, вводит код, имя и email, придумывает пароль и подтверждает почту по письму.'}</p></div></div>
+      <div class="d-card ${C.smsEnabled ? '' : 'soft'}"><div class="row between"><div><h2 class="d-h2" style="margin:0">Вход по SMS: ${C.smsEnabled ? 'включён' : 'выключен'}</h2>
+        <p class="muted" style="margin:6px 0 0;max-width:640px">${C.smsEnabled ? 'Ученики регистрируются и входят по номеру телефона и коду из SMS. Email остаётся вторым способом.' : 'Включайте только после подключения SMS-провайдера в Supabase (Authentication → Sign In / Providers → Phone: Twilio, MessageBird, Vonage или Textlocal). Иначе коды не будут приходить.'}</p></div>
+        <button class="btn ${C.smsEnabled ? 'ghost' : 'primary'}" id="smstog">${C.smsEnabled ? 'Выключить' : 'Включить'}</button></div><div id="smsmsg" role="alert" class="muted" style="min-height:1.2em;margin-top:6px"></div></div>`);
+    ui.$('#smstog').onclick = async b => { const el = ui.$('#smstog'); if (!C.smsEnabled && !confirm('Провайдер SMS уже подключён в Supabase? Если нет, ученики не получат коды. Включить?')) return; el.disabled = true; try { await C.setSms(!C.smsEnabled); U.toast(C.smsEnabled ? 'Вход по SMS включён' : 'Вход по SMS выключен'); ui.dispatch(); } catch (x) { ui.$('#smsmsg').textContent = C.err(x); el.disabled = false; } };
     ui.$('#cplink').onclick = () => copy(siteUrl()); ui.$('#shlink').onclick = () => share('Платформа для занятий английским: ' + siteUrl());
   }));
 
@@ -181,14 +227,14 @@
     ui.$('#sort').value = F.sort;
     const draw = () => {
       ui.$$('#flt .choice').forEach(b => b.classList.toggle('on', b.dataset.f === F.f));
-      let rows = d.students.filter(x => (x.name + ' ' + (x.login || '') + ' ' + (x.email || '')).toLowerCase().includes(F.q.toLowerCase()));
+      let rows = d.students.filter(x => (x.name + ' ' + (x.login || '') + ' ' + (x.email || '') + ' ' + (x.phone || '')).toLowerCase().includes(F.q.toLowerCase()));
       if (F.f === 'active') rows = rows.filter(x => daysSince(x.last_seen) < 3 && x.sum.onboarded);
       if (F.f === 'quiet') rows = rows.filter(x => daysSince(x.last_seen) >= 3);
       if (F.f === 'new') rows = rows.filter(x => !x.sum.onboarded);
       const key = { last: x => -new Date(x.last_seen || 0), prog: x => -(x.sum.progress || 0), acc: x => -(x.sum.acc == null ? -1 : x.sum.acc), week: x => -(x.sum.weekMin || 0), name: x => x.name.toLowerCase() }[F.sort];
       rows.sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
       ui.$('#list').innerHTML = rows.length ? `<div class="adm-table"><div class="adm-th"><span>Ученик</span><span>Прогресс</span><span>Этап</span><span>Неделя</span><span>Точность</span><span>Серия</span><span>Заходил</span></div>${rows.map(x => { const m = x.sum, quiet = daysSince(x.last_seen) >= 3;
-        return `<a class="adm-tr" href="#/admin/s/${x.id}"><span class="adm-name"><b>${esc(x.name)}</b>${x.email ? `<small class="muted">${esc(x.email)}</small>` : x.login ? `<small class="muted">логин ${esc(x.login)} · без email</small>` : '<small class="muted">без email</small>'}</span>
+        return `<a class="adm-tr" href="#/admin/s/${x.id}"><span class="adm-name"><b>${esc(x.name)}</b>${contact(x) ? `<small class="muted">${esc(contact(x))}</small>` : x.login ? `<small class="muted">логин ${esc(x.login)} · без контакта</small>` : '<small class="muted">без контакта</small>'}</span>
           ${m.onboarded ? `<span data-l="Прогресс"><div class="d-bar"><i style="width:${Math.round(m.progress * 100)}%"></i></div><small>${Math.round(m.progress * 100)}%</small></span><span data-l="Этап">${m.stage} · ${m.level}</span><span data-l="Неделя">${m.weekMin} / ${m.goalMin}′</span><span data-l="Точность">${m.acc == null ? '—' : Math.round(m.acc * 100) + '%'}</span><span data-l="Серия">🔥 ${m.streak}</span>`
             : '<span class="muted" style="grid-column:2 / 7">Знакомство ещё не пройдено</span>'}<span data-l="Заходил" class="${quiet ? 'down' : ''}">${ago(x.last_seen)}</span></a>`; }).join('')}</div>` : '<div class="d-card muted">Никого не нашли. Измените поиск или фильтр.</div>';
     };
@@ -203,7 +249,7 @@
     const dash = has ? JP.studentDashboard(st.state) : '<div class="d-card muted">Ученик ещё не начал занятия.</div>';
     const rep = has ? JP.teacherReport(st.state) : '';
     out(`<a href="#/admin/students" class="muted">← все ученики</a>
-      <div class="d-card" style="margin-top:8px"><div class="row between"><div><h2 class="d-h2" style="font-size:1.5rem">${esc(st.name)}</h2><div class="muted">${st.email ? 'Email: <b>' + esc(st.email) + '</b>' : st.login ? 'Логин: <b>' + esc(st.login) + '</b> (email не привязан)' : 'Email не привязан'} · регистрация ${U.fmt(st.created_at.slice(0, 10))} · последний вход: ${ago(st.last_seen)}</div></div>
+      <div class="d-card" style="margin-top:8px"><div class="row between"><div><h2 class="d-h2" style="font-size:1.5rem">${esc(st.name)}</h2><div class="muted">${st.phone ? 'Телефон: <b>' + esc(contact(st)) + '</b>' + (st.email ? ' · ' + esc(st.email) : '') : st.email ? 'Email: <b>' + esc(st.email) + '</b>' : st.login ? 'Логин: <b>' + esc(st.login) + '</b> (контакт не привязан)' : 'Контакт не привязан'} · регистрация ${U.fmt(st.created_at.slice(0, 10))} · последний вход: ${ago(st.last_seen)}</div></div>
         <div class="row"><button class="btn small" id="asstu">👁 Как видит ученик</button><button class="btn small" id="rec">🔑 Сброс доступа</button><button class="btn small" id="exp">⬇️ Данные</button><button class="btn small ghost" id="del" style="color:var(--bad)">Удалить</button></div></div><div id="newcode"></div></div>
       <div class="adm-tabs"><button class="choice on" data-t="dash">Прогресс</button><button class="choice" data-t="rep">Отчёт для занятия</button></div>
       <div id="t-dash">${dash}</div><div id="t-rep" hidden>${rep}</div>`);
@@ -228,7 +274,7 @@
       else if (kind === 'student' && st && st.state && st.state.units) localStorage.setItem('b1.preview.v1', JSON.stringify(st.state));
       else localStorage.removeItem('b1.preview.v1');
     } catch (e) { return U.toast('Не удалось подготовить просмотр'); }
-    const u = siteUrl() + '?preview=' + kind + (st ? '&as=' + encodeURIComponent(st.name) + (st.email ? '' : '&noemail=1') : '') + '#/';
+    const u = siteUrl() + '?preview=' + kind + (st ? '&as=' + encodeURIComponent(st.name) + (st.email || st.phone ? '' : '&noemail=1') : '') + '#/';
     if (!window.open(u, '_blank')) location.href = u;
   }
   ui.route('/admin/preview', () => guard('/admin/preview', 'Глазами ученика', (d, out) => {
@@ -261,12 +307,12 @@
         <section class="d-card" id="cused" aria-label="Использованные коды"><div class="row between" style="margin-bottom:8px"><h2 class="d-h2">Использованные · <span id="nused">${used.length}</span></h2>${used.length ? '<button class="btn small" id="dlused">.csv</button>' : ''}</div>
           ${used.length ? used.map(i => { const st = who(i);
             return `<div class="list-item used"><span class="grow"><b style="letter-spacing:.08em;opacity:.7">${esc(i.code)}</b> <span class="chip">✓ использован</span><br>
-              <span>${st ? `<a href="#/admin/s/${esc(st.id)}"><b>${esc(st.name)}</b></a>${st.email ? ' · ' + esc(st.email) : st.login ? ' · ' + esc(st.login) : ''}` : '<span class="muted">ученик удалён</span>'}</span><br>
+              <span>${st ? `<a href="#/admin/s/${esc(st.id)}"><b>${esc(st.name)}</b></a>${contact(st) ? ' · ' + esc(contact(st)) : st.login ? ' · ' + esc(st.login) : ''}` : '<span class="muted">ученик удалён</span>'}</span><br>
               <small class="muted">зарегистрировался ${esc(fmtDT(i.used_at))}${i.label ? ' · подпись «' + esc(i.label) + '»' : ''}</small></span></div>`; }).join('') : '<p class="muted">Использованных кодов пока нет. Когда ученик зарегистрируется по коду, код появится здесь вместе с его именем и датой.</p>'}</section></div>`);
     const csvq = v => '"' + String(v || '').replace(/"/g, '""') + '"';
     const cpall = ui.$('#cpall'); if (cpall) cpall.onclick = () => copy(free.map(i => i.code + (i.label ? '  ' + i.label : '')).join('\n'));
     const dlall = ui.$('#dlall'); if (dlall) dlall.onclick = () => ui.download('b1-codes-free-' + U.today() + '.csv', 'code,label,created\n' + free.map(i => [i.code, csvq(i.label), i.created_at.slice(0, 10)].join(',')).join('\n'), 'text/csv');
-    const dlu = ui.$('#dlused'); if (dlu) dlu.onclick = () => ui.download('b1-codes-used-' + U.today() + '.csv', 'code,student,email_or_login,registered_at\n' + used.map(i => { const st = who(i) || {}; return [i.code, csvq(st.name), csvq(st.email || st.login), i.used_at].join(','); }).join('\n'), 'text/csv');
+    const dlu = ui.$('#dlused'); if (dlu) dlu.onclick = () => ui.download('b1-codes-used-' + U.today() + '.csv', 'code,student,email_or_login,registered_at\n' + used.map(i => { const st = who(i) || {}; return [i.code, csvq(st.name), csvq(contact(st) || st.login), i.used_at].join(','); }).join('\n'), 'text/csv');
     ui.$$('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
     ui.$$('[data-invite]').forEach(b => b.onclick = () => share(inviteText(b.dataset.invite, '')));
     ui.$$('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Удалить этот код?')) { try { await C.deleteInvite(b.dataset.del); cache = null; ui.dispatch(); } catch (x) { U.toast(C.err(x)); } } });

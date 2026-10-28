@@ -20,8 +20,8 @@
         <span class="chip warm" title="Занятий подряд по расписанию">🔥 ${streak}</span></div>
       <div class="card"><div class="amy"><div class="avatar">🙂</div><div class="bubble" style="box-shadow:none;border:0;padding:0;background:transparent">${esc(A.homeMessage(day))}</div></div></div>
       ${(() => { const C = JP.cloud; const demo = JP.preview && (JP.preview.kind === 'demo' || JP.preview.noemail); if (!demo && !(C && C.enabled && C.token() && !C.authed)) return ''; if ((S().seen.linkSnooze || '') > U.today()) return ''; const pend = C.pending && C.pending();
-        return `<div class="card warm" id="linkbanner"><div class="row between"><b>📧 ${pend && pend.legacyToken ? 'Завершите привязку email' : 'Привяжите email'}</b><button class="icon-btn" id="snooze" aria-label="Напомнить позже">✕</button></div>
-          <p class="muted" style="margin:6px 0 10px">${pend && pend.legacyToken ? 'Подтвердите почту по письму и завершите привязку.' : 'Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.'}</p><a class="btn primary small" href="#/more">${pend && pend.legacyToken ? 'Завершить' : 'Привязать email'}</a></div>`; })()}
+        return `<div class="card warm" id="linkbanner"><div class="row between"><b>${C.smsEnabled ? '📱' : '📧'} ${pend && pend.legacyToken ? 'Завершите привязку' : C.smsEnabled ? 'Привяжите телефон или email' : 'Привяжите email'}</b><button class="icon-btn" id="snooze" aria-label="Напомнить позже">✕</button></div>
+          <p class="muted" style="margin:6px 0 10px">${pend && pend.legacyToken ? 'Подтвердите ' + (pend && pend.phone ? 'номер по SMS' : 'почту по письму') + ' и завершите привязку.' : 'Чтобы входить с любого устройства' + (C.smsEnabled ? ' по номеру телефона или email' : ' по email и паролю') + '. Прогресс сохранится.'}</p><a class="btn primary small" href="#/more">${pend && pend.legacyToken ? 'Завершить' : C.smsEnabled ? 'Привязать' : 'Привязать email'}</a></div>`; })()}
       <div class="card"><div class="row between"><h2 style="margin:0">Сегодня</h2><small class="muted">${doneN} из ${day.tasks.length}</small></div>
         ${ui.bar(day.tasks.length ? doneN / day.tasks.length : 0)}
         <div style="margin-top:6px">${tasks || '<p class="muted">Задач нет. Можно взять дополнительный урок.</p>'}</div>
@@ -187,20 +187,25 @@
     ui.set(`<h1>Профиль и настройки</h1>
       ${JP.preview ? '<div class="card warm"><h3>Аккаунт</h3><p class="muted" style="margin:0">Режим просмотра: вход и сервер отключены, все действия остаются только в этом окне.</p></div>' : (() => {
         const C = JP.cloud, authed = !!(C && C.authed), legacy = !!(C && C.token() && !authed), PW = 'width:100%;font:inherit;border:2px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px;background:var(--card);color:var(--ink);margin-bottom:8px';
-        const who = authed ? ' (' + esc(S().seen.cloudEmail || C.email || '') + ')' : S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : '';
+        const who = authed ? ' (' + esc(S().seen.cloudEmail || C.email || (C.phone ? '+' + String(C.phone).replace('+', '') : '')) + ')' : S().seen.cloudLogin ? ' (логин: ' + esc(S().seen.cloudLogin) + ')' : '';
         const status = (authed || legacy) ? 'Прогресс сохраняется на сервере автоматически' + (C.status === 'ok' ? ' ✓' : C.status === 'err' ? ' (сейчас нет связи, сохраню позже)' : C.status === 'revoked' ? ' — доступ отозван, войдите снова' : '') + '.' : 'Вход не выполнен: данные только на этом устройстве.';
-        const pend = C && C.pending && C.pending(); const waiting = legacy && pend && pend.legacyToken && pend.email;
+        const pend = C && C.pending && C.pending(); const waiting = legacy && pend && pend.legacyToken && pend.email; const waitingSms = legacy && pend && pend.legacyToken && pend.phone; const needPw = authed && !C.email && !S().seen.pwSet; const sms = !!(C && C.smsEnabled);
         return `<div class="card"><h3>Аккаунт</h3><p>Вы вошли как <b>${esc(p.name)}</b>${who}. ${status}</p>
-          ${legacy ? (waiting ? `<div class="card soft" id="linkbox"><b>Подтвердите почту</b><p class="muted" style="margin:4px 0 8px">Мы отправили письмо на ${esc(pend.email)}. Перейдите по ссылке в письме, затем введите пароль и завершите привязку.</p>
+          ${legacy ? (waitingSms ? `<div class="card soft" id="linkbox"><b>Введите код из SMS</b><p class="muted" style="margin:4px 0 8px">Код отправлен на ${esc(pend.phone)}.</p>
+              <input type="text" id="lcode" placeholder="Код из SMS" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="${PW}"><div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><div class="row"><button class="btn primary" id="finphone">Подтвердить</button><button class="btn ghost" id="cancellink">Отмена</button></div></div>`
+            : waiting ? `<div class="card soft" id="linkbox"><b>Подтвердите почту</b><p class="muted" style="margin:4px 0 8px">Мы отправили письмо на ${esc(pend.email)}. Перейдите по ссылке в письме, затем введите пароль и завершите привязку.</p>
               <input type="password" id="lp" placeholder="Пароль, который вы указали" autocomplete="current-password" style="${PW}"><div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><div class="row"><button class="btn primary" id="finlink">Завершить привязку</button><button class="btn ghost" id="cancellink">Отмена</button></div></div>`
             : `<div class="card soft" id="linkbox"><b>Привяжите email</b><p class="muted" style="margin:4px 0 8px">Чтобы входить с любого устройства по email и паролю. Прогресс сохранится.</p>
-              <input type="text" id="le" placeholder="Email" inputmode="email" autocapitalize="off" style="${PW}"><input type="password" id="lp" placeholder="Придумайте пароль (от 8 символов)" autocomplete="new-password" style="${PW}"><input type="password" id="lp2" placeholder="Повторите пароль" autocomplete="new-password" style="${PW}">
+              ${sms ? `<input type="tel" id="lph" placeholder="Номер телефона, например +7 777 123 45 67" inputmode="tel" autocomplete="tel" style="${PW}"><div class="row" style="margin-bottom:8px"><button class="btn primary" id="sendphone">Получить код по SMS</button></div><p class="muted" style="margin:0 0 8px">или привяжите email:</p>` : ''}<input type="text" id="le" placeholder="Email" inputmode="email" autocapitalize="off" style="${PW}"><input type="password" id="lp" placeholder="Придумайте пароль (от 8 символов)" autocomplete="new-password" style="${PW}"><input type="password" id="lp2" placeholder="Повторите пароль" autocomplete="new-password" style="${PW}">
               <div id="lmsg" role="alert" style="color:var(--bad);min-height:1.2em"></div><button class="btn primary" id="sendlink">Отправить письмо для подтверждения</button></div>`) : ''}
-          ${(authed || (legacy && S().seen.cloudLogin)) ? `<div class="card soft" id="chpw"><b>🔒 Сменить пароль</b>
+          ${needPw ? `<div class="card warm" id="setpw"><b>🔒 Задайте пароль</b><p class="muted" style="margin:4px 0 8px">Чтобы входить по номеру и паролю, без ожидания SMS.</p>
+            <input type="password" id="sp1" placeholder="Пароль, не короче 8 символов" autocomplete="new-password" style="${PW}"><input type="password" id="sp2" placeholder="Повторите пароль" autocomplete="new-password" style="${PW}">
+            <div id="spmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savesp">Сохранить пароль</button></div>` : ''}
+          ${((authed && !needPw) || (legacy && S().seen.cloudLogin)) ? `<div class="card soft" id="chpw"><b>🔒 Сменить пароль</b>
             <input type="password" id="op" placeholder="Текущий пароль" autocomplete="current-password" style="${PW};margin-top:8px"><input type="password" id="n1" placeholder="Новый пароль, не короче 8 символов" autocomplete="new-password" style="${PW}"><input type="password" id="n2" placeholder="Повторите новый пароль" autocomplete="new-password" style="${PW}">
             <div id="cmsg" role="alert" style="min-height:1.2em;color:var(--bad)"></div><button class="btn primary" id="savechpw">Сохранить новый пароль</button><p class="muted" style="font-size:.85rem;margin:8px 0 0">На других устройствах придётся войти заново.</p></div>` : ''}
           <div class="row"><button class="btn" id="logout">Выйти</button></div>
-          <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по email и паролю.</p></div>`;
+          <p class="muted" style="font-size:.85rem;margin-bottom:0">«Выйти» завершает вход на этом устройстве. Прогресс остаётся на сервере: войдите снова по ${sms ? 'номеру или email' : 'email'} и паролю.</p></div>`;
       })()}
 
       <div class="card"><h3>Режим занятий</h3>
@@ -252,6 +257,18 @@
     };
     const fl = ui.$('#finlink'); if (fl) fl.onclick = async () => { const m = ui.$('#lmsg'); fl.disabled = true; m.textContent = '';
       try { await JP.cloud.finishLink(ui.$('#lp').value); U.toast('Email привязан. Теперь входите по email и паролю'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); fl.disabled = false; } };
+    const sp = ui.$('#sendphone'); if (sp) sp.onclick = async () => {
+      const m = ui.$('#lmsg'), ph = JP.cloud.normPhone(ui.$('#lph').value); m.textContent = '';
+      if (!ph) { m.textContent = 'Проверьте номер телефона.'; return; }
+      sp.disabled = true; try { await JP.cloud.linkPhone(ph); U.toast('Код отправлен по SMS'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); sp.disabled = false; }
+    };
+    const fp = ui.$('#finphone'); if (fp) fp.onclick = async () => { const m = ui.$('#lmsg'); fp.disabled = true; m.textContent = '';
+      try { await JP.cloud.finishLinkPhone(JP.cloud.pending().phone, ui.$('#lcode').value); U.toast('Телефон привязан'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); fp.disabled = false; } };
+    const ss = ui.$('#savesp'); if (ss) ss.onclick = async () => {
+      const m = ui.$('#spmsg'), a = ui.$('#sp1').value; m.style.color = 'var(--bad)';
+      if (a.length < 8) { m.textContent = 'Пароль должен быть не короче 8 символов.'; return; } if (a !== ui.$('#sp2').value) { m.textContent = 'Пароли не совпадают.'; return; }
+      ss.disabled = true; try { await JP.cloud.setPasswordFirst(a); U.toast('Пароль задан'); ui.dispatch(); } catch (x) { m.textContent = JP.cloud.err(x); ss.disabled = false; }
+    };
     const cl = ui.$('#cancellink'); if (cl) cl.onclick = () => { localStorage.removeItem('b1.pending'); ui.dispatch(); };
     ui.$('#snd').onchange = e => { S().settings.sound = e.target.checked; JP.store.save(); };
     ui.$('#exp').onclick = () => ui.download('progress-' + U.today() + '.json', JP.store.exportJSON(), 'application/json');
