@@ -275,3 +275,8 @@ small.irr-c.hid { display: inline-flex; min-width: 54px; min-height: 20px; }
   #irrtable { box-shadow: none; border: 0; } #irrtable .irr-head { position: static; } .irr-row { break-inside: avoid; } .irr-row.known { background: none; }
   #irrtable .icon-btn, #irrtable .irr-k { display: none; } #irrtable .irr-head span:nth-child(4) { display: none; } #irrtable .irr-head, #irrtable .irr-row { grid-template-columns: 1.3fr 1fr 1fr; }
 }
+
+/* коды: две колонки */
+.codes-cols { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+@media (min-width: 900px) { .codes-cols { grid-template-columns: 1fr 1fr; } }
+.list-item.used { opacity: .95; } .list-item.used .chip { background: var(--ok-soft); }

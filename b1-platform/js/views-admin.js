@@ -134,7 +134,6 @@
     render(d, (body, o) => shell(path, title, body, o));
   }
   const freeCodes = d => d.invites.filter(i => !i.used_at);
-  const isReset = i => !!i.student_id && !i.used_at;
 
   // ---------- Обзор ----------
   ui.route('/admin', () => guard('/admin', 'Обзор', (d, out) => {
@@ -243,36 +242,39 @@
   }));
 
   // ---------- Коды ----------
-  const CF = { f: 'free' };
+  const fmtDT = iso => { const d = new Date(iso); if (isNaN(d)) return ''; return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); };
   ui.route('/admin/codes', () => guard('/admin/codes', 'Коды', (d, out) => {
     const byId = Object.fromEntries(d.students.map(s => [s.id, s]));
-    const free = d.invites.filter(i => !i.used_at && !i.student_id), reset = d.invites.filter(isReset), used = d.invites.filter(i => i.used_at);
+    const free = d.invites.filter(i => !i.used_at).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const used = d.invites.filter(i => i.used_at).sort((a, b) => String(b.used_at).localeCompare(String(a.used_at)));
+    const who = i => byId[i.student_id];
     out(`<div class="d-main"><div class="d-card soft"><h2 class="d-h2">Создать код</h2>
         <div class="row" style="margin-top:8px"><input type="text" id="lab" placeholder="Подпись (необязательно), например имя" class="grow" maxlength="60"><button class="btn primary" id="mk">Создать код</button></div>
         <div class="row" style="margin-top:10px"><span class="muted">Или пачку:</span><input type="number" id="cnt" value="10" min="2" max="50" style="width:90px"><button class="btn" id="mkn">Создать</button></div><div id="newcode"></div></div>
       <div class="d-card warm"><h2 class="d-h2">Ссылка для учеников</h2><div style="font-weight:700;word-break:break-all;margin:6px 0">${esc(siteUrl())}</div><div class="row"><button class="btn small" id="cplink">Копировать</button><button class="btn small ghost" id="shlink">Поделиться</button></div>
-        <p class="muted" style="font-size:.85rem;margin:8px 0 0">Каждый код работает один раз. «Приглашение» формирует готовый текст со ссылкой, в которую уже вписан код.</p></div></div>
-      <div class="choices" id="cflt" style="margin:4px 0 12px">${[['free', 'Свободные', free.length], ['reset', 'Сброс доступа', reset.length], ['used', 'Использованные', used.length]].map(([k, l, n]) => `<button class="choice" data-f="${k}">${l} · ${n}</button>`).join('')}</div>
-      <div class="d-card" id="clist"></div>`);
-    const draw = () => {
-      ui.$$('#cflt .choice').forEach(b => b.classList.toggle('on', b.dataset.f === CF.f));
-      const rows = CF.f === 'free' ? free : CF.f === 'reset' ? reset : used;
-      const bar = CF.f !== 'used' && rows.length ? `<div class="row between" style="margin-bottom:8px"><b>${rows.length} ${U.plural(rows.length, 'код', 'кода', 'кодов')}</b><div class="row"><button class="btn small" id="cpall">Копировать все</button><button class="btn small" id="dlall">Скачать .csv</button></div></div>` : '';
-      ui.$('#clist').innerHTML = bar + (rows.length ? rows.map(i => { const who = byId[i.student_id];
-        return `<div class="list-item"><span class="grow"><b style="letter-spacing:.08em">${esc(i.code)}</b><br><small class="muted">${esc(i.label || 'без подписи')} · создан ${ago(i.created_at)}${i.used_at ? ' · использован' + (who ? ': ' + esc(who.name) + (who.login ? ' (@' + esc(who.login) + ')' : '') : '') : ''}</small></span>
-          ${i.used_at ? '' : `<button class="btn small" data-copy="${esc(i.code)}">Код</button><button class="btn small" data-invite="${esc(i.code)}">Приглашение</button><button class="icon-btn" data-del="${esc(i.code)}" aria-label="Удалить код">🗑</button>`}</div>`; }).join('') : `<p class="muted">${CF.f === 'free' ? 'Свободных кодов нет. Создайте код или пачку выше.' : CF.f === 'reset' ? 'Кодов сброса доступа нет. Они создаются в карточке ученика.' : 'Использованных кодов пока нет.'}</p>`);
-      const cpall = ui.$('#cpall'); if (cpall) cpall.onclick = () => copy(rows.map(i => i.code + (i.label ? '  ' + i.label : '')).join('\n'));
-      const dlall = ui.$('#dlall'); if (dlall) dlall.onclick = () => ui.download('b1-codes-' + U.today() + '.csv', 'code,label,created\n' + rows.map(i => [i.code, '"' + (i.label || '').replace(/"/g, '""') + '"', i.created_at.slice(0, 10)].join(',')).join('\n'), 'text/csv');
-      ui.$$('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
-      ui.$$('[data-invite]').forEach(b => b.onclick = () => share(inviteText(b.dataset.invite, '')));
-      ui.$$('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Удалить этот код?')) { try { await C.deleteInvite(b.dataset.del); cache = null; ui.dispatch(); } catch (x) { U.toast(C.err(x)); } } });
-    };
-    ui.$$('#cflt .choice').forEach(b => b.onclick = () => { CF.f = b.dataset.f; draw(); }); draw();
+        <p class="muted" style="font-size:.85rem;margin:8px 0 0">Каждый код работает один раз. Использованный код сразу переходит в правую колонку: с именем ученика и датой регистрации.</p></div></div>
+      <div class="codes-cols">
+        <section class="d-card" id="cfree" aria-label="Свободные коды"><div class="row between" style="margin-bottom:8px"><h2 class="d-h2">Свободные · <span id="nfree">${free.length}</span></h2>${free.length ? '<div class="row"><button class="btn small" id="cpall">Копировать все</button><button class="btn small" id="dlall">.csv</button></div>' : ''}</div>
+          ${free.length ? free.map(i => { const st = i.student_id && who(i);
+            return `<div class="list-item"><span class="grow"><b style="letter-spacing:.08em">${esc(i.code)}</b>${i.student_id ? ' <span class="chip warm">сброс доступа</span>' : ''}<br><small class="muted">${esc(i.label || 'без подписи')}${st ? ' · для ' + esc(st.name) : ''} · создан ${ago(i.created_at)}</small></span>
+              <button class="btn small" data-copy="${esc(i.code)}">Код</button><button class="btn small" data-invite="${esc(i.code)}">Приглашение</button><button class="icon-btn" data-del="${esc(i.code)}" aria-label="Удалить код">🗑</button></div>`; }).join('') : '<p class="muted">Свободных кодов нет. Создайте код или пачку выше.</p>'}</section>
+        <section class="d-card" id="cused" aria-label="Использованные коды"><div class="row between" style="margin-bottom:8px"><h2 class="d-h2">Использованные · <span id="nused">${used.length}</span></h2>${used.length ? '<button class="btn small" id="dlused">.csv</button>' : ''}</div>
+          ${used.length ? used.map(i => { const st = who(i);
+            return `<div class="list-item used"><span class="grow"><b style="letter-spacing:.08em;opacity:.7">${esc(i.code)}</b> <span class="chip">✓ использован</span><br>
+              <span>${st ? `<a href="#/admin/s/${esc(st.id)}"><b>${esc(st.name)}</b></a>${st.email ? ' · ' + esc(st.email) : st.login ? ' · ' + esc(st.login) : ''}` : '<span class="muted">ученик удалён</span>'}</span><br>
+              <small class="muted">зарегистрировался ${esc(fmtDT(i.used_at))}${i.label ? ' · подпись «' + esc(i.label) + '»' : ''}</small></span></div>`; }).join('') : '<p class="muted">Использованных кодов пока нет. Когда ученик зарегистрируется по коду, код появится здесь вместе с его именем и датой.</p>'}</section></div>`);
+    const csvq = v => '"' + String(v || '').replace(/"/g, '""') + '"';
+    const cpall = ui.$('#cpall'); if (cpall) cpall.onclick = () => copy(free.map(i => i.code + (i.label ? '  ' + i.label : '')).join('\n'));
+    const dlall = ui.$('#dlall'); if (dlall) dlall.onclick = () => ui.download('b1-codes-free-' + U.today() + '.csv', 'code,label,created\n' + free.map(i => [i.code, csvq(i.label), i.created_at.slice(0, 10)].join(',')).join('\n'), 'text/csv');
+    const dlu = ui.$('#dlused'); if (dlu) dlu.onclick = () => ui.download('b1-codes-used-' + U.today() + '.csv', 'code,student,email_or_login,registered_at\n' + used.map(i => { const st = who(i) || {}; return [i.code, csvq(st.name), csvq(st.email || st.login), i.used_at].join(','); }).join('\n'), 'text/csv');
+    ui.$$('[data-copy]').forEach(b => b.onclick = () => copy(b.dataset.copy));
+    ui.$$('[data-invite]').forEach(b => b.onclick = () => share(inviteText(b.dataset.invite, '')));
+    ui.$$('[data-del]').forEach(b => b.onclick = async () => { if (confirm('Удалить этот код?')) { try { await C.deleteInvite(b.dataset.del); cache = null; ui.dispatch(); } catch (x) { U.toast(C.err(x)); } } });
     ui.$('#cplink').onclick = () => copy(siteUrl()); ui.$('#shlink').onclick = () => share('Платформа для занятий английским: ' + siteUrl());
-    ui.$('#mk').onclick = async () => { const lab = ui.$('#lab').value.trim(); try { const code = await C.createInvite(lab); cache = null; CF.f = 'free'; ui.dispatch(); setTimeout(() => showCode(code, lab), 80); } catch (x) { U.toast(C.err(x)); } };
+    ui.$('#mk').onclick = async () => { const lab = ui.$('#lab').value.trim(); try { const code = await C.createInvite(lab); cache = null; ui.dispatch(); setTimeout(() => showCode(code, lab), 80); } catch (x) { U.toast(C.err(x)); } };
     ui.$('#mkn').onclick = async () => {
       const n = Math.max(2, Math.min(50, parseInt(ui.$('#cnt').value, 10) || 10)), lab = ui.$('#lab').value.trim(); const btn = ui.$('#mkn'); btn.disabled = true; btn.textContent = 'Создаю…';
-      try { for (let i = 1; i <= n; i++) await C.createInvite(lab ? lab + ' ' + i : ''); U.toast('Создано кодов: ' + n); cache = null; CF.f = 'free'; ui.dispatch(); } catch (x) { U.toast(C.err(x)); btn.disabled = false; btn.textContent = 'Создать'; }
+      try { for (let i = 1; i <= n; i++) await C.createInvite(lab ? lab + ' ' + i : ''); U.toast('Создано кодов: ' + n); cache = null; ui.dispatch(); } catch (x) { U.toast(C.err(x)); btn.disabled = false; btn.textContent = 'Создать'; }
     };
   }));
 })(window.JP);

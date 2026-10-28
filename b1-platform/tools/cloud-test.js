@@ -19,7 +19,7 @@ window.supabase = { createClient() { save(load()); return {
       if (!s) { const inv = db.invites.find(x => norm(x.code) === norm(a.p_code) && !x.used_at); if (!inv) return { error: { message: 'bad_code' } };
         if (inv.student_id) { s = db.students.find(x => x.id === inv.student_id); s.auth_uid = u.id; s.email = db.current; }
         else { if (!a.p_name) return { error: { message: 'name_required' } }; s = { id: 's' + (db.students.length + 1), name: a.p_name, email: db.current, auth_uid: u.id, state: null, created_at: new Date().toISOString(), last_seen: new Date().toISOString() }; db.students.push(s); inv.student_id = s.id; }
-        inv.used_at = 'x'; }
+        inv.used_at = new Date().toISOString(); }
       return done({ data: { name: s.name, state: s.state, email: s.email } }); }
     if (fn === 'b1_claim_legacy') { const u = cur(db); if (!u) return { error: { message: 'not_authenticated' } }; const s = db.students.find(x => x.id === db.sessions[a.p_token]); if (!s) return { error: { message: 'bad_token' } };
       if (s.auth_uid && s.auth_uid !== u.id) return { error: { message: 'already_linked' } }; s.auth_uid = u.id; s.email = db.current; return done({ data: { name: s.name, state: s.state, email: s.email } }); }
@@ -119,10 +119,12 @@ const setDB = (pg, fn) => pg.evaluate(f => { const db = JSON.parse(localStorage.
   await p.click('.adm-side nav a:has-text("Ученики")'); await p.waitForSelector('#list .adm-tr');
   ok(await p.locator('#list .adm-tr:has-text("Мария")').count() === 1 && await p.locator('text=maria@mail.com').count() > 0, 'в списке ученик виден с подтверждённым email');
   await p.fill('#q', 'maria@'); ok(await p.locator('#list .adm-tr').count() === 1, 'поиск по email работает'); await p.fill('#q', 'нет такого'); await p.waitForSelector('text=Никого не нашли'); await p.fill('#q', '');
-  await p.click('.adm-side nav a:has-text("Коды")'); await p.waitForSelector('#mkn'); await p.fill('#lab', 'Пачка'); await p.fill('#cnt', '5'); await p.click('#mkn'); await p.waitForSelector('#clist [data-invite]');
+  await p.click('.adm-side nav a:has-text("Коды")'); await p.waitForSelector('#mkn'); await p.fill('#lab', 'Пачка'); await p.fill('#cnt', '5'); await p.click('#mkn'); await p.waitForSelector('#cfree [data-invite]');
   ok((await DB(p)).invites.filter(i => /^Пачка/.test(i.label || '')).length === 5, 'создаётся пачка из 5 кодов');
-  await p.click('#cflt [data-f=used]'); ok(await p.locator('#clist:has-text("использован: Мария")').count() === 1, 'видно, кто воспользовался кодом');
-  await p.click('#cflt [data-f=free]');
+  { const used = await p.locator('#cused').innerText(), free = await p.locator('#cfree').innerText(); const day = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    ok(used.includes('ABCDE-FGHJK') && used.includes('Мария') && used.includes('maria@mail.com') && used.includes('зарегистрировался') && used.includes(day), 'использованный код переехал в колонку «Использованные»: с именем, email и датой регистрации');
+    ok(!free.includes('ABCDE-FGHJK') && (await p.locator('#nused').textContent()) === '1' && (await p.locator('#nfree').textContent()) === '5', 'из «Свободных» он исчез, счётчики колонок верные (свободных 5, использованных 1)'); }
+  ok(await p.locator('#cused a[href^="#/admin/s/"]').count() === 1, 'имя в использованных кодах ведёт в карточку ученика');
   const inv = await p.evaluate(() => { let txt = ''; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); Object.defineProperty(navigator, 'clipboard', { value: { writeText: t => { txt = t; return Promise.resolve(); } }, configurable: true }); document.querySelector('[data-invite]').click(); return new Promise(r => setTimeout(() => r(txt), 100)); });
   ok(/#\/login\?code=/.test(inv) && /email/.test(inv), 'приглашение содержит ссылку с кодом и просьбу подтвердить email');
   // сброс доступа: ученик регистрируется с новым email и сохраняет прогресс
