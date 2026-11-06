@@ -30,6 +30,17 @@ Object.values(D.lessons).forEach(l => {
     } else err(w + 'unknown type');
   });
 });
+// сценарии речевой практики
+Object.entries(D.speak || {}).forEach(([id, sp]) => {
+  if (!D.lessons[id]) err('speak: нет урока ' + id);
+  if (!sp.say || sp.say.length < 4) err('speak ' + id + ': меньше 4 образцов для повтора');
+  if (!sp.subs || sp.subs.length < 3) err('speak ' + id + ': меньше 3 подстановок');
+  if (!sp.tasks || sp.tasks.length < 2) err('speak ' + id + ': меньше 2 ситуаций');
+  const en = [].concat(sp.say, (sp.subs || []).map(x => x.m), (sp.tasks || []).map(x => x.m));
+  en.forEach(t => { if (!t || /[А-Яа-яЁё]/.test(t)) err('speak ' + id + ': образец пустой или не по-английски: ' + t); });
+  (sp.subs || []).forEach(x => { if (!/[А-Яа-яЁё]/.test(x.c)) err('speak ' + id + ': подсказка без русского: ' + x.c); });
+});
+if (Object.keys(D.speak || {}).length < 12) err('speak: сценариев меньше 12');
 const pl = D.placement;
 pl.forEach((p, i) => { if (!(p.a >= 0 && p.a < p.o.length)) err('placement #' + (i + 1) + ' bad index'); if (!ids.has(p.u)) err('placement unit ' + p.u); });
 const seen = new Set();

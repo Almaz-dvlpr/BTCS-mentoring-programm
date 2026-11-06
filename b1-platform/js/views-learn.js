@@ -43,6 +43,7 @@
     if (task.type === 'unit') return startUnit(task.ref, task);
     if (task.type === 'srs') return startSrs(task);
     if (task.type === 'greview') return startReview(task.ref, task);
+    if (task.type === 'speak') return JP.speakStart(task.ref, task);
     return startQuiz(task.type, task);
   }
 
@@ -82,7 +83,7 @@
         emoji: score >= 0.85 ? '🎉' : score >= 0.6 ? '👍' : '💪', title: `${res.length - bad} из ${res.length}`, score,
         msg: A.praise(score) + (bad ? ' Давай сразу разберём ошибки.' : ''),
         html: mistakes(res) + (L.write ? `<div class="card"><h3>✍️ Мини-письмо (по желанию)</h3><p>${esc(L.write)}</p><textarea id="wr" placeholder="Пиши здесь…"></textarea><div class="row" style="margin-top:8px"><button class="btn" id="wsave">Сохранить для преподавателя</button><small class="muted" id="wmsg"></small></div></div>` : ''),
-        cta: (bad ? '<button class="btn accent block" id="fix" style="margin-bottom:8px">Исправить ошибки</button>' : '') + nextCta()
+        cta: (bad ? '<button class="btn accent block" id="fix" style="margin-bottom:8px">Исправить ошибки</button>' : '') + (JP.speak && JP.speak.build(it.id) ? `<a class="btn primary block" style="margin-bottom:8px" href="#/speak/${esc(it.id)}">🗣 Скажи вслух (5 мин)</a>` : '') + nextCta()
       });
       const fix = ui.$('#fix'); if (fix) fix.onclick = () => practice(res.filter(r => !r.ok).map(r => r.q), true);
       const ws = ui.$('#wsave'); if (ws) ws.onclick = () => { const t = ui.$('#wr').value.trim(); if (t.length < 8) return U.toast('Напиши хотя бы одно предложение'); S().writings.push({ date: U.today(), id: it.id, title: it.title, prompt: L.write, text: t }); JP.store.save(); ui.$('#wmsg').textContent = 'Сохранено ✓'; ws.disabled = true; };

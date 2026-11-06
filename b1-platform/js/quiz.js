@@ -12,6 +12,7 @@
   }
 
   // opts: {onDone(results), label, speakOnOk}
+  JP.sentenceOf = sentenceOf;
   JP.runQuiz = function (root, questions, opts) {
     opts = opts || {};
     const total = questions.length; let i = 0; const results = [];

@@ -98,6 +98,24 @@
     JP.store.save();
   };
 
+  // ---------- Речевая практика («Скажи вслух») ----------
+  // после темы идёт речевой дриллинг; он возвращается через 3, 10 и 25 дней как повтор «на скорость»
+  const SPEAK_INTERVALS = [3, 10, 25];
+  E.speakable = id => { const u = S().units[id]; return !!u && u.status === 'done' && !u.fromTest && !!D.lessons[id]; };
+  E.pendingSpeak = () => Object.entries(S().units)
+    .filter(([id, u]) => E.speakable(id) && !u.speak && u.doneAt && U.diffDays(u.doneAt, U.today()) <= 14)
+    .sort((a, b) => a[1].doneAt.localeCompare(b[1].doneAt)).map(([id]) => id);
+  E.dueSpeak = () => Object.entries(S().units).filter(([id, u]) => E.speakable(id) && u.speak && !u.speak.skipped && u.speak.next && u.speak.next <= U.today())
+    .sort((a, b) => a[1].speak.next.localeCompare(b[1].speak.next)).map(([id]) => id);
+  // fluency: 0..1 по самооценке («легко» = 1, «с запинкой» = 0.5, «не смог» = 0); null = пропущено
+  E.saveSpeak = (id, fluency, ms) => {
+    const u = S().units[id]; if (!u) return; const prev = u.speak || {};
+    if (fluency == null) { u.speak = { date: U.today(), runs: prev.runs || 0, skipped: true, fluency: prev.fluency == null ? null : prev.fluency }; JP.store.save(); return u.speak; }
+    const runs = (prev.runs || 0) + 1;
+    u.speak = { date: U.today(), runs, fluency, best: Math.max(prev.best || 0, fluency), ms: ms || null, next: U.addDays(U.today(), fluency < 0.6 ? 2 : SPEAK_INTERVALS[Math.min(runs - 1, SPEAK_INTERVALS.length - 1)]) };
+    JP.store.save(); return u.speak;
+  };
+
   // ---------- Повторения грамматики ----------
   E.dueReviews = () => {
     const t = U.today();
@@ -224,6 +242,11 @@
     const st = E.pendingStageTest();
     const dr = E.dueReviews();
     if (dr.length) { const it = E.item(dr[0]); add({ type: 'greview', ref: dr[0], title: 'Повторение: ' + (it ? it.title : dr[0]), desc: 'Мини-тест из 5 вопросов', minutes: 5 }); rb += 5; }
+    const ps = E.pendingSpeak(), dsp = E.dueSpeak(); const sp = ps[0] || dsp[0];
+    // пока прошлая тема не проговорена вслух, новые грамматические темы не начинаем
+    const hold = ps.some(id => S().units[id].doneAt < U.today());
+    const gram = it => !['vocab', 'irregular', 'write'].includes(it.kind);
+    if (sp) { const it = E.item(sp); add({ type: 'speak', ref: sp, title: 'Скажи вслух: ' + (it ? it.title : sp), desc: ps[0] ? 'Речевая практика: доводим тему до автоматизма' : 'Повтор на скорость', minutes: 5 }); rb += 5; }
     const dueC = E.dueCards().length;
     if (dueC) { const room = Math.max(3, reviewBudget - rb); const n = Math.min(dueC, room * 3); add({ type: 'srs', title: 'Слова: повторение', desc: n + ' ' + U.plural(n, 'карточка', 'карточки', 'карточек'), n, minutes: Math.max(3, Math.ceil(n / 3)) }); }
 
@@ -232,13 +255,14 @@
     } else if (budget <= 12) {
       if (!tasks.length && !rest) {
         if (E.quizPool('all').length >= 5) add({ type: 'mix', title: 'Быстрая разминка', desc: '5 вопросов по пройденному', minutes: 5 });
-        else { const it = E.nextItems(1)[0]; if (it) add(unitTask(it, it.pm)); }
+        else { const it = E.nextItems(1)[0]; if (it && !(hold && gram(it))) add(unitTask(it, it.pm)); }
       }
     } else {
       if (E.checkpointDue()) add({ type: 'checkpoint', title: 'Недельная проверка', desc: '10 вопросов по последним темам', minutes: 10 });
       let first = true;
       for (const it of E.nextItems(6)) {
         const room = budget - used;
+        if (hold && gram(it)) break;
         if (!first && room < it.minutes) break;
         add(unitTask(it, first ? U.clamp(room, it.pm, it.minutes) : it.minutes)); first = false;
         if (budget - used < 10) break;
@@ -256,7 +280,7 @@
   };
   E.syncDay = () => {
     const d = E.day(U.today());
-    d.tasks.forEach(t => { if (t.type === 'unit' && !t.done && E.isDone(t.ref)) t.done = true; });
+    d.tasks.forEach(t => { if (t.type === 'unit' && !t.done && E.isDone(t.ref)) t.done = true; if (t.type === 'speak' && !t.done && S().units[t.ref] && S().units[t.ref].speak && S().units[t.ref].speak.date === U.today()) t.done = true; });
     JP.store.save(); return d;
   };
   E.markTask = (type, ref) => {

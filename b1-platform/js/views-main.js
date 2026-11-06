@@ -11,7 +11,7 @@
     const next = open[0];
     const dueC = E.dueCards().length;
     const tasks = day.tasks.map(t => {
-      const ic = { unit: t.kind === 'vocab' ? '🔤' : t.kind === 'irregular' ? '🧩' : t.kind === 'write' ? '✍️' : '📘', srs: '🃏', greview: '🔁', checkpoint: '📝', stagetest: '🏆', mix: '⚡' }[t.type] || '•';
+      const ic = { unit: t.kind === 'vocab' ? '🔤' : t.kind === 'irregular' ? '🧩' : t.kind === 'write' ? '✍️' : '📘', srs: '🃏', greview: '🔁', speak: '🗣', checkpoint: '📝', stagetest: '🏆', mix: '⚡' }[t.type] || '•';
       const inner = `<span class="dot">${t.done ? '✓' : ic}</span><span class="grow"><span class="tt">${esc(t.title)}</span><br><small class="muted">${esc(t.desc || '')} · ~${t.minutes} мин</small></span>${t.done ? '' : '<span class="muted">›</span>'}`;
       return t.done ? `<div class="task done">${inner}</div>` : `<a class="task" href="#/do/${t.id}">${inner}</a>`;
     }).join('');
@@ -88,7 +88,7 @@
       ${S().writings.length ? `<div class="card"><h3>Письменные работы (${S().writings.length})</h3>${S().writings.slice().reverse().slice(0, forTeacher ? 20 : 3).map(w => `<details><summary>${esc(w.title)} · ${U.fmt(w.date)}</summary>${forTeacher ? `<p class="muted">${esc(w.prompt)}</p>` : ''}<p style="white-space:pre-wrap">${esc(w.text)}</p></details>`).join('')}</div>` : ''}`;
   }
   // ---------- Дашборд ----------
-  const CATS = [['grammar', 'Грамматика', 'var(--d-gold)'], ['words', 'Слова', 'var(--d-blue)'], ['writing', 'Письмо', 'var(--d-rose)'], ['review', 'Повторение и тесты', 'var(--d-green)']];
+  const CATS = [['grammar', 'Грамматика', 'var(--d-gold)'], ['words', 'Слова', 'var(--d-blue)'], ['writing', 'Письмо', 'var(--d-rose)'], ['review', 'Повторение и тесты', 'var(--d-green)'], ['speaking', 'Речь', 'var(--d-violet)']];
   function spark(vals, w, h) {
     const max = Math.max(1, ...vals), n = vals.length - 1 || 1;
     const pts = vals.map((v, i) => [i / n * w, h - 3 - v / max * (h - 8)]);
@@ -98,9 +98,9 @@
   function weeklyChart() {
     const mon = U.mondayOf(U.today()); const weeks = [];
     for (let k = 11; k >= 0; k--) {
-      const start = U.addDays(mon, -7 * k); const c = { grammar: 0, words: 0, writing: 0, review: 0 };
+      const start = U.addDays(mon, -7 * k); const c = { grammar: 0, words: 0, writing: 0, review: 0, speaking: 0 };
       for (let i = 0; i < 7; i++) { const d = S().days[U.addDays(start, i)]; if (!d) continue; if (d.cat) Object.keys(c).forEach(x => { c[x] += d.cat[x] || 0; }); else c.grammar += d.minutes || 0; }
-      weeks.push({ start, c, tot: c.grammar + c.words + c.writing + c.review });
+      weeks.push({ start, c, tot: c.grammar + c.words + c.writing + c.review + c.speaking });
     }
     const goal = S().profile.daysPerWeek * S().profile.minutesPerDay; const max = Math.max(goal, ...weeks.map(w => w.tot), 60);
     const W = 600, H = 220, L = 34, B = 24, bw = (W - L) / 12;
@@ -316,7 +316,10 @@
     const items = [];
     if (weak.length) items.push('Разобрать на занятии: ' + weak.map(x => '«' + esc(x.title) + '»').join(', '));
     if (w) items.push('Дать обратную связь по письменным работам (' + w + ')');
-    const p = S().profile; if (p && (p.difficulties || []).includes('speaking')) items.push('Ученица отметила трудность с разговором — добавить речевую практику на занятии');
+    const sp = Object.entries(S().units).filter(([, u]) => u.speak && u.speak.runs && u.speak.fluency != null).map(([id, u]) => ({ it: E.item(id), f: u.speak.fluency })).filter(x => x.it).sort((a, b) => a.f - b.f);
+    const shaky = sp.filter(x => x.f < 0.6).slice(0, 3); if (shaky.length) items.push('Отработать вслух на занятии (в речевой практике запинки): ' + shaky.map(x => '«' + esc(x.it.title) + '»').join(', '));
+    const skipped = Object.values(S().units).filter(u => u.speak && u.speak.skipped && !u.speak.runs).length; if (skipped >= 2) items.push('Речевую практику пропущено ' + skipped + ' раз(а): обсудить, почему');
+    const p = S().profile; if (p && (p.difficulties || []).includes('speaking')) items.push('Ученик отметил трудность с разговором — добавить речевую практику на занятии');
     if (E.missedScheduledDays() >= 2) items.push('Пропущено занятий подряд: ' + E.missedScheduledDays() + ' — узнать, что мешает');
     if (!items.length) items.push('Пока данных мало — рекомендаций нет.');
     return `<div class="card warm"><h3>Что обсудить на следующем занятии</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`;
