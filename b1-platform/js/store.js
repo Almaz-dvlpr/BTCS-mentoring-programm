@@ -15,6 +15,8 @@
     units: {},            // id -> {status, score, doneAt, step, next, weak, tries}
     cards: {},            // wordId -> {box, due, seen, ok}
     vocabLearned: {},     // vocab unit id -> date
+    dictKnown: {},        // скрытый раздел «Словарь»: wordId -> timestamp отметки «знаю» (слово больше не показывается)
+    dictDaily: 10,        // скрытый раздел «Словарь»: сколько новых слов показывать за раз
     days: {},             // date -> {tasks:[], minutes, extra}
     writings: [],         // {date, id, title, text}
     checkpoints: [],      // {date, type, stage, score, n}
