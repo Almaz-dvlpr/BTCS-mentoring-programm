@@ -46,7 +46,7 @@
     render();
   });
 
-  function render(letterKey) {
+  function render(letterKey, o) {
     const letter = LETTERS.find(l => l.key === letterKey) || LETTERS[0];
     const all = letter.data();
     const known = knownMap();
@@ -54,7 +54,16 @@
     const knownCount = all.filter(w => known[w.id]).length;
     const queue = all.filter(w => !known[w.id]);
     const n = dailyN();
-    const batch = queue.slice(0, n);
+    // слова, уже показанные в этой сессии на экране, остаются на месте, пока их не отметят «знаю»;
+    // так список не перескакивает в начало, когда вперемешку отмечают слова из середины партии
+    let shown = (o && o.keepShown) || queue.slice(0, n).map(w => w.id);
+    shown = shown.filter(id => !known[id]);
+    while (shown.length < n && shown.length < queue.length) {
+      const next = queue.find(w => !shown.includes(w.id));
+      if (!next) break;
+      shown.push(next.id);
+    }
+    const batch = shown.map(id => all.find(w => w.id === id)).filter(Boolean);
     const pct = total ? Math.round(knownCount / total * 100) : 0;
 
     const letterTabs = LETTERS.length > 1
@@ -63,22 +72,52 @@
 
     ui.set(`<a href="#/words" class="muted">← слова</a><h1>Словарь: буква ${esc(letter.key)}</h1>
       ${letterTabs}
-      <div class="grid3"><div class="card stat"><b>${total}</b><small>всего слов</small></div><div class="card stat"><b>${knownCount}</b><small>знаю</small></div><div class="card stat"><b>${queue.length}</b><small>осталось</small></div></div>
-      <div class="bar" style="margin:4px 0 16px"><i style="width:${pct}%"></i></div>
+      <div class="grid3"><div class="card stat"><b id="statTotal">${total}</b><small>всего слов</small></div><div class="card stat"><b id="statKnown">${knownCount}</b><small>знаю</small></div><div class="card stat"><b id="statLeft">${queue.length}</b><small>осталось</small></div></div>
+      <div class="bar" style="margin:4px 0 16px"><i id="statBar" style="width:${pct}%"></i></div>
       <div class="card"><div class="row between" style="align-items:center">
           <label class="muted" for="daily" style="margin:0">Новых слов за раз</label>
           <input type="number" id="daily" min="1" max="200" value="${n}" style="width:72px;font:inherit;border:2px solid var(--line);border-radius:10px;padding:6px 8px;background:var(--card);color:var(--ink)">
         </div></div>
-      <div id="list">${batch.length ? `<div class="card"><div class="words">${batch.map(wordRow).join('')}</div></div>` : `<div class="card center"><div class="emoji-xl">🎉</div><p>${queue.length === 0 ? 'Все слова на букву ' + esc(letter.key) + ' отмечены как изученные.' : 'Ничего не осталось показать — увеличьте число слов за раз.'}</p></div>`}</div>`);
+      <div id="list">${batch.length ? `<div class="card"><div class="words" id="words">${batch.map(wordRow).join('')}</div></div>` : `<div class="card center"><div class="emoji-xl">🎉</div><p>${queue.length === 0 ? 'Все слова на букву ' + esc(letter.key) + ' отмечены как изученные.' : 'Ничего не осталось показать — увеличьте число слов за раз.'}</p></div>`}</div>`,
+      { keepScroll: !!(o && o.keepScroll) });
 
     ui.$('#daily').onchange = () => {
       const st = S(); st.dictDaily = U.clamp(+ui.$('#daily').value || 10, 1, 200); JP.store.save(); render(letter.key);
     };
     ui.$$('[data-letter]').forEach(b => b.onclick = () => render(b.dataset.letter));
-    ui.$$('#list [data-know]').forEach(btn => btn.onclick = () => {
-      knownMap()[btn.dataset.know] = Date.now(); JP.store.save(); render(letter.key);
-    });
-    ui.$$('#list [data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say));
+    wireRows();
+
+    function wireRows() {
+      ui.$$('#list [data-know]').forEach(btn => btn.onclick = () => markKnown(btn));
+      ui.$$('#list [data-say]').forEach(b => b.onclick = () => U.say(b.dataset.say));
+    }
+
+    function markKnown(btn) {
+      const id = btn.dataset.know;
+      knownMap()[id] = Date.now(); JP.store.save();
+      const freshKnown = all.filter(w => knownMap()[w.id]).length;
+      const freshQueue = all.filter(w => !knownMap()[w.id]);
+      // убираем отмеченное слово из текущего списка на экране и, если есть, подставляем следующее
+      // невиданное слово снизу — остальные строки и прокрутка остаются как были
+      const idx = shown.indexOf(id);
+      if (idx !== -1) shown.splice(idx, 1);
+      const row = btn.closest('.word');
+      const next = freshQueue.find(w => !shown.includes(w.id));
+      if (next) {
+        shown.push(next.id);
+        const tmp = document.createElement('div'); tmp.innerHTML = wordRow(next);
+        const newRow = tmp.firstElementChild;
+        if (row && row.parentNode) row.parentNode.insertBefore(newRow, row.nextSibling);
+        newRow.querySelector('[data-know]').onclick = () => markKnown(newRow.querySelector('[data-know]'));
+        const sayBtn = newRow.querySelector('[data-say]'); if (sayBtn) sayBtn.onclick = () => U.say(sayBtn.dataset.say);
+      }
+      if (row) row.remove();
+      const wordsBox = ui.$('#words');
+      if (!wordsBox || !wordsBox.children.length) { render(letter.key, { keepShown: shown, keepScroll: true }); return; }
+      ui.$('#statKnown').textContent = freshKnown;
+      ui.$('#statLeft').textContent = freshQueue.length;
+      ui.$('#statBar').style.width = (total ? Math.round(freshKnown / total * 100) : 0) + '%';
+    }
   }
 
   function wordRow(w) {
